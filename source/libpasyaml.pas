@@ -124,9 +124,136 @@ type
   );
   yaml_mapping_style_t = yaml_mapping_style_e;
 
+  { Token types. }
+  yaml_token_type_e = (
+    YAML_NO_TOKEN,                   { An empty token. }
+    YAML_STREAM_START_TOKEN,         { A STREAM-START token. }
+    YAML_STREAM_END_TOKEN,           { A STREAM-END token. }
+    YAML_VERSION_DIRECTIVE_TOKEN,    { A VERSION-DIRECTIVE token. }
+    YAML_TAG_DIRECTIVE_TOKEN,        { A TAG-DIRECTIVE token. }
+    YAML_DOCUMENT_START_TOKEN,       { A DOCUMENT-START token. }
+    YAML_DOCUMENT_END_TOKEN,         { A DOCUMENT-END token. }
+    YAML_BLOCK_SEQUENCE_START_TOKEN, { A BLOCK-SEQUENCE-START token. }
+    YAML_BLOCK_MAPPING_START_TOKEN,  { ??? }
+    YAML_BLOCK_END_TOKEN,            { A BLOCK-END token. }
+    YAML_FLOW_SEQUENCE_START_TOKEN,  { A FLOW-SEQUENCE-START token. }
+    YAML_FLOW_SEQUENCE_END_TOKEN,    { A FLOW-SEQUENCE-END token. }
+    YAML_FLOW_MAPPING_START_TOKEN,   { A FLOW-MAPPING-START token. }
+    YAML_FLOW_MAPPING_END_TOKEN,     { A FLOW-MAPPING-END token. }
+    YAML_BLOCK_ENTRY_TOKEN,          { A BLOCK-ENTRY token. }
+    YAML_FLOW_ENTRY_TOKEN,           { A FLOW-ENTRY token. }
+    YAML_KEY_TOKEN,                  { A KEY token. }
+    YAML_VALUE_TOKEN,                { A VALUE token. }
+    YAML_ALIAS_TOKEN,                { An ALIAS token. }
+    YAML_ANCHOR_TOKEN,               { An ANCHOR token. }
+    YAML_TAG_TOKEN,                  { A TAG token. }
+    YAML_SCALAR_TOKEN                { A SCALAR token. }
+  );
+  yaml_token_type_t = yaml_token_type_e;
+
+  { The stream start (for @c YAML_STREAM_START_TOKEN). }
+  { The stream parameters (for @c YAML_STREAM_START_EVENT). }
+  stream_start : record
+    encoding : yaml_encoding_t;      { The stream encoding. }
+  end;
+
+  { The alias (for @c YAML_ALIAS_TOKEN). }
+  token_alias : record
+    value : pyaml_char_t;            { The alias value. }
+  end;
+
+  { The anchor (for @c YAML_ANCHOR_TOKEN). }
+  anchor = record
+    value : pyaml_char_t;            { The alias value. }
+  end;
+
+  { The tag (for @c YAML_TAG_TOKEN). }
+  tag = record
+    handle : pyaml_char_t;           { The tag handle. }
+    suffix : pyaml_char_t;           { The tag suffix. }
+  end;
+
+  { The scalar value (for @c YAML_SCALAR_TOKEN). }
+  scalar = record
+    value : pyaml_char_t;            { The scalar value. }
+    length : QWord;                  { The length of the scalar value. }
+    style : yaml_scalar_style_t;     { The scalar style. }
+  end;
+
+  { The version directive (for @c YAML_VERSION_DIRECTIVE_TOKEN). }
+  pversion_directive = ^version_directive;
+  version_directive = record
+    major : Integer;                 { The major version number. }
+    minor : Integer;                 { The minor version number. }
+  end;
+
+  { The tag directive (for @c YAML_TAG_DIRECTIVE_TOKEN). }
+  tag_directive = record
+    handle : pyaml_char_t;           { The tag handle. }
+    prefix : pyaml_char_t;           { The tag prefix. }
+  end;
+
+  { The token structure. }
+  yaml_token_s = record
+    token_type : yaml_token_type_t;  { The token type. }
+    { The token data. }
+    case token : Integer of
+      1 : (data : stream_start);
+      2 : (data : token_alias);
+      3 : (data : anchor);
+      4 : (data : tag);
+      5 : (data : scalar);
+      6 : (data : version_directive);
+      7 : (data : tag_directive);
+    start_mark : yaml_mark_t;        { The beginning of the token. }
+    end_mark : yaml_mark_t;          { The end of the token. }
+  end;
+  yaml_token_t = yaml_token_s;
+
+  { Event types. }
+  yaml_event_type_e = (
+    YAML_NO_EVENT,                   { An empty event. }
+    YAML_STREAM_START_EVENT,         { A STREAM-START event. }
+    YAML_STREAM_END_EVENT,           { A STREAM-END event. }
+    YAML_DOCUMENT_START_EVENT,       { A DOCUMENT-START event. }
+    YAML_DOCUMENT_END_EVENT,         { A DOCUMENT-END event. }
+    YAML_ALIAS_EVENT,                { An ALIAS event. }
+    YAML_SCALAR_EVENT,               { A SCALAR event. }
+    YAML_SEQUENCE_START_EVENT,       { A SEQUENCE-START event. }
+    YAML_SEQUENCE_END_EVENT,         { A SEQUENCE-END event. }
+    YAML_MAPPING_START_EVENT,        { A MAPPING-START event. }
+    YAML_MAPPING_END_EVENT           { A MAPPING-END event. }
+  );
+  yaml_event_type_t = yaml_event_type_e;
+
+  { The event structure. }
+  yaml_event_s = record
+    event_type : yaml_event_type_t;  { The event type. }
+    case data : Integer of
+    { The stream parameters (for @c YAML_STREAM_START_EVENT). }
+    1 : (stream_start : record
+           encoding : yaml_encoding_t; { The document encoding. }
+         end;
+        );
+    { The document parameters (for @c YAML_DOCUMENT_START_EVENT). }
+    2 : (document_start : record
+           { The version directive. }
+           version_directive : pyaml_version_directive_t;
+           { The list of tag directives }
+           tag_directives : record
+             { The beginning of the tag directives list. }
+             start : pyaml_tag_directive_t;
+             { The end of the tag directives list. }
+             end_tag : pyaml_tag_directive_t;
+           end;
+         end;
+        );
+  end;
+
+
 
 {$IFDEF WINDOWS}
-  const libYaml = 'libYaml.dll';
+  const libYaml = 'libyaml.dll';
 {$ENDIF}
 {$IFDEF LINUX}
   const libYaml = 'libyaml.so';
@@ -144,6 +271,13 @@ function yaml_get_version_string : PChar; cdecl; external libYaml;
 { patch   Patch version number. }
 procedure yaml_get_version (major : PInteger; minor : PInteger; patch :
   PInteger); cdecl; external libYaml;
+
+{ Free any memory allocated for a token object. }
+{ token   A token object. }
+procedure yaml_token_delete (token : pyaml_token_t); cdecl; external libYaml;
+
+
+
 
 
 implementation
