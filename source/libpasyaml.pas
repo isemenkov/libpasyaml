@@ -151,60 +151,63 @@ type
   );
   yaml_token_type_t = yaml_token_type_e;
 
-  { The stream start (for @c YAML_STREAM_START_TOKEN). }
-  { The stream parameters (for @c YAML_STREAM_START_EVENT). }
-  stream_start : record
-    encoding : yaml_encoding_t;      { The stream encoding. }
-  end;
-
-  { The alias (for @c YAML_ALIAS_TOKEN). }
-  token_alias : record
-    value : pyaml_char_t;            { The alias value. }
-  end;
-
-  { The anchor (for @c YAML_ANCHOR_TOKEN). }
-  anchor = record
-    value : pyaml_char_t;            { The alias value. }
-  end;
-
-  { The tag (for @c YAML_TAG_TOKEN). }
-  tag = record
-    handle : pyaml_char_t;           { The tag handle. }
-    suffix : pyaml_char_t;           { The tag suffix. }
-  end;
-
-  { The scalar value (for @c YAML_SCALAR_TOKEN). }
-  scalar = record
-    value : pyaml_char_t;            { The scalar value. }
-    length : QWord;                  { The length of the scalar value. }
-    style : yaml_scalar_style_t;     { The scalar style. }
-  end;
-
-  { The version directive (for @c YAML_VERSION_DIRECTIVE_TOKEN). }
-  pversion_directive = ^version_directive;
-  version_directive = record
-    major : Integer;                 { The major version number. }
-    minor : Integer;                 { The minor version number. }
-  end;
-
-  { The tag directive (for @c YAML_TAG_DIRECTIVE_TOKEN). }
-  tag_directive = record
-    handle : pyaml_char_t;           { The tag handle. }
-    prefix : pyaml_char_t;           { The tag prefix. }
-  end;
-
   { The token structure. }
   yaml_token_s = record
     token_type : yaml_token_type_t;  { The token type. }
     { The token data. }
     case token : Integer of
-      1 : (data : stream_start);
-      2 : (data : token_alias);
-      3 : (data : anchor);
-      4 : (data : tag);
-      5 : (data : scalar);
-      6 : (data : version_directive);
-      7 : (data : tag_directive);
+      { The stream start (for @c YAML_STREAM_START_TOKEN). }
+      1 : (stream_start : record
+             { The stream encoding. }
+             encoding : yaml_encoding_t;
+           end;
+          );
+      { The alias (for @c YAML_ALIAS_TOKEN). }
+      2 : (alias_param : record
+             { The alias value. }
+             value : pyaml_char_t;
+           end;
+          );
+      { The anchor (for @c YAML_ANCHOR_TOKEN). }
+      3 : (anchor : record
+             { The anchor value. }
+             value : pyaml_char_t;
+           end;
+          );
+      { The tag (for @c YAML_TAG_TOKEN). }
+      4 : (tag : record
+             { The tag handle. }
+             handle : pyaml_char_t;
+             { The tag suffix. }
+             suffix : pyaml_char_t;
+           end;
+          );
+      { The scalar value (for @c YAML_SCALAR_TOKEN). }
+      5 : (scalar : record
+             { The scalar value. }
+             value : pyaml_char_t;
+             { The length of the scalar value. }
+             length : QWord;
+             { The scalar style. }
+             style : yaml_scalar_style_t;
+           end;
+          );
+      { The version directive (for @c YAML_VERSION_DIRECTIVE_TOKEN). }
+      6 : (version_directive : record
+             { The major version number. }
+             major : Integer;
+             { The minor version number. }
+             minor : Integer;
+           end;
+          );
+      { The tag directive (for @c YAML_TAG_DIRECTIVE_TOKEN). }
+      7 : (tag_directive : record
+             { The tag handle. }
+             handle : pyaml_char_t;
+             { The tag prefix. }
+             prefix : pyaml_char_t;
+           end;
+          );
     start_mark : yaml_mark_t;        { The beginning of the token. }
     end_mark : yaml_mark_t;          { The end of the token. }
   end;
@@ -232,7 +235,8 @@ type
     case data : Integer of
     { The stream parameters (for @c YAML_STREAM_START_EVENT). }
     1 : (stream_start : record
-           encoding : yaml_encoding_t; { The document encoding. }
+           { The document encoding. }
+           encoding : yaml_encoding_t;
          end;
         );
     { The document parameters (for @c YAML_DOCUMENT_START_EVENT). }
@@ -246,8 +250,66 @@ type
              { The end of the tag directives list. }
              end_tag : pyaml_tag_directive_t;
            end;
+           { Is the document indicator implicit? }
+           implicit : Integer;
          end;
         );
+    { The document end parameters (for @c YAML_DOCUMENT_END_EVENT). }
+    3 : (document_end : record
+           { Is the document end indicator implicit? }
+           implicit : Integer;
+         end;
+        );
+    { The alias parameters (for @c YAML_ALIAS_EVENT). }
+    4: (alias_param : record
+          { The anchor. }
+          anchor : pyaml_char_t;
+        end;
+       );
+    { The scalar parameters (for @c YAML_SCALAR_EVENT). }
+    5 : (scalar : record
+         { The anchor. }
+         anchor : pyaml_char_t;
+         { The tag. }
+         tag : pyaml_char_t;
+         { The scalar value. }
+         value : pyaml_char_t;
+         { The length of the scalar value. }
+         length : QWord;
+         { Is the tag optional for the plain style? }
+         plain_implicit : Integer;
+         { Is the tag optional for any non-plain style? }
+         quoted_implicit : Integer;
+         { The scalar style. }
+         style : yaml_scalar_style_t;
+         end;
+        );
+    { The sequence parameters (for @c YAML_SEQUENCE_START_EVENT). }
+    6 : (sequence_start : record
+         { The anchor. }
+         anchor : pyaml_char_t;
+         { The tag. }
+         tag : pyaml_char_t;
+         { Is the tag optional? }
+         implicit : Integer;
+         { The sequence style. }
+         style : yaml_sequence_style_t;
+         end;
+        );
+    { The mapping parameters (for @c YAML_MAPPING_START_EVENT). }
+    7 : (mapping_start : record
+         { The anchor. }
+         anchor : pyaml_char_t;
+         { The tag. }
+         tag : pyaml_char_t;
+         { Is the tag optional? }
+         implicit : Integer;
+         { The mapping style. }
+         style : yaml_mapping_style_t;
+         end;
+        );
+    start_mark : yaml_mark_t;        { The beginning of the event. }
+    end_mark : yaml_mark_t;          { The end of the event. }
   end;
 
 
