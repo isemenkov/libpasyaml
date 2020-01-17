@@ -311,8 +311,8 @@ type
     start_mark : yaml_mark_t;        { The beginning of the event. }
     end_mark : yaml_mark_t;          { The end of the event. }
   end;
-
-
+  pyaml_event_t = ^yaml_event_t;
+  yaml_event_t = yaml_event_s;
 
 {$IFDEF WINDOWS}
   const libYaml = 'libyaml.dll';
@@ -321,25 +321,163 @@ type
   const libYaml = 'libyaml.so';
 {$ENDIF}
 
-{ Get the library version as a string. }
-{ The function returns the pointer to a static string of the form
+{ Get the library version as a string.
+
+  @returns The function returns the pointer to a static string of the form
   @c "X.Y.Z", where @c X is the major version number, @c Y is a minor version
   number, and @c Z is the patch version number. }
 function yaml_get_version_string : PChar; cdecl; external libYaml;
 
-{ Get the library version numbers. }
-{ major   Major version number. }
-{ minor   Minor version number. }
-{ patch   Patch version number. }
+{ Get the library version numbers.
+
+  @param[out]      major   Major version number.
+  @param[out]      minor   Minor version number.
+  @param[out]      patch   Patch version number. }
 procedure yaml_get_version (major : PInteger; minor : PInteger; patch :
   PInteger); cdecl; external libYaml;
 
-{ Free any memory allocated for a token object. }
-{ token   A token object. }
+{ Free any memory allocated for a token object.
+
+  @param[in,out]   token   A token object. }
 procedure yaml_token_delete (token : pyaml_token_t); cdecl; external libYaml;
 
+{ Create the STREAM-START event.
 
+  @param[out]      event       An empty event object.
+  @param[in]       encoding    The stream encoding.
 
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_stream_start_event_initialize (event : pyaml_event_t; encoding :
+  yaml_encoding_t) : Integer; cdecl; external libYaml;
+
+{ Create the STREAM-END event.
+
+  @param[out]      event       An empty event object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_stream_end_event_initialize (event : pyaml_event_t) : Integer;
+  cdecl; external libYaml;
+
+{ Create the DOCUMENT-START event.
+
+  The @a implicit argument is considered as a stylistic parameter and may be
+  ignored by the emitter.
+
+  @param[out]      event                   An empty event object.
+  @param[in]       version_directive       The %YAML directive value or
+                                           @c NULL.
+  @param[in]       tag_directives_start    The beginning of the %TAG
+                                           directives list.
+  @param[in]       tag_directives_end      The end of the %TAG directives
+                                           list.
+  @param[in]       implicit                If the document start indicator is
+                                           implicit.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_document_start_event_initialize (event : pyaml_event_t;
+  version_directive : pyaml_version_directive_t; tag_directives_start :
+  pyaml_tag_directive_t; tag_directives_end : pyaml_tag_directive_t;
+  implicit : Integer) : Integer; cdecl; external libYaml;
+
+{ Create the DOCUMENT-END event.
+
+  The @a implicit argument is considered as a stylistic parameter and may be
+  ignored by the emitter.
+
+  @param[out]      event       An empty event object.
+  @param[in]       implicit    If the document end indicator is implicit.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_document_end_event_initialize (event : pyaml_event_t; implicit :
+  Integer) : Integer; cdecl; external libYaml;
+
+{ Create an ALIAS event.
+
+  @param[out]      event       An empty event object.
+  @param[in]       anchor      The anchor value.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_alias_event_initialize (event : pyaml_event_t; anchor :
+  pyaml_char_t) : Integer; cdecl; external libYaml;
+
+{ Create a SCALAR event.
+
+  The @a style argument may be ignored by the emitter.
+
+  Either the @a tag attribute or one of the @a plain_implicit and
+  @a quoted_implicit flags must be set.
+
+  @param[out]      event           An empty event object.
+  @param[in]       anchor          The scalar anchor or @c NULL.
+  @param[in]       tag             The scalar tag or @c NULL.
+  @param[in]       value           The scalar value.
+  @param[in]       length          The length of the scalar value.
+  @param[in]       plain_implicit  If the tag may be omitted for the plain
+                                   style.
+  @param[in]       quoted_implicit If the tag may be omitted for any
+                                   non-plain style.
+  @param[in]       style           The scalar style.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_scalar_event_initialize (event : pyaml_event_t; anchor :
+  pyaml_char_t; tag : pyaml_char_t; value : pyaml_char_t; length : Integer;
+  plain_implicit : Integer; quoted_implicit : Integer; style :
+  yaml_scalar_style_t) : Integer; cdecl; external libYaml;
+
+{ Create a SEQUENCE-START event.
+
+  The @a style argument may be ignored by the emitter.
+
+  Either the @a tag attribute or the @a implicit flag must be set.
+
+  @param[out]      event       An empty event object.
+  @param[in]       anchor      The sequence anchor or @c NULL.
+  @param[in]       tag         The sequence tag or @c NULL.
+  @param[in]       implicit    If the tag may be omitted.
+  @param[in]       style       The sequence style.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_sequence_start_event_initialize (event : pyaml_event_t;
+  anchor : pyaml_char_t; tag : pyaml_char_t; implicit : Integer; style :
+  yaml_sequence_style_t) : Integer; cdecl; external libYaml;
+
+{ Create a SEQUENCE-END event.
+
+  @param[out]      event       An empty event object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_sequence_end_event_initialize (event : pyaml_event_t) : Integer;
+  cdecl; external libYaml;
+
+{ Create a MAPPING-START event.
+
+  The @a style argument may be ignored by the emitter.
+
+  Either the @a tag attribute or the @a implicit flag must be set.
+
+  @param[out]      event       An empty event object.
+  @param[in]       anchor      The mapping anchor or @c NULL.
+  @param[in]       tag         The mapping tag or @c NULL.
+  @param[in]       implicit    If the tag may be omitted.
+  @param[in]       style       The mapping style.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_mapping_start_event_initialize (event : pyaml_event_t; anchor :
+  pyaml_char_t; tag : pyaml_char_t; implicit : Integer; style :
+  yaml_mapping_style_t) : Integer; cdecl; external libYaml;
+
+{ Create a MAPPING-END event.
+
+  @param[out]      event       An empty event object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_mapping_end_event_initialize (event : pyaml_event_t) : Integer;
+  cdecl; external libYaml;
+
+{ Free any memory allocated for an event object.
+
+  @param[in,out]   event   An event object. }
+procedure yaml_event_delete (event : pyaml_event_t); cdecl; external libYaml;
 
 
 implementation
