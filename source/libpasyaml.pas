@@ -110,22 +110,23 @@ type
 
   { Many bad things could happen with the parser and emitter. }
   yaml_error_type_e = (
-    YAML_NO_ERROR,         { No error is produced. }
-    YAML_MEMORY_ERROR,     { Cannot allocate or reallocate a block of memory. }
-    YAML_READER_ERROR,     { Cannot read or decode the input stream. }
-    YAML_SCANNER_ERROR,    { Cannot scan the input stream. }
-    YAML_PARSER_ERROR,     { Cannot parse the input stream. }
-    YAML_COMPOSER_ERROR,   { Cannot compose a YAML document. }
-    YAML_WRITER_ERROR,     { Cannot write to the output stream. }
-    YAML_EMITTER_ERROR     { Cannot emit a YAML stream. }
+    YAML_NO_ERROR,                   { No error is produced. }
+    YAML_MEMORY_ERROR,               { Cannot allocate or reallocate a block of
+                                       memory. }
+    YAML_READER_ERROR,               { Cannot read or decode the input stream. }
+    YAML_SCANNER_ERROR,              { Cannot scan the input stream. }
+    YAML_PARSER_ERROR,               { Cannot parse the input stream. }
+    YAML_COMPOSER_ERROR,             { Cannot compose a YAML document. }
+    YAML_WRITER_ERROR,               { Cannot write to the output stream. }
+    YAML_EMITTER_ERROR               { Cannot emit a YAML stream. }
   );
   yaml_error_type_t = yaml_error_type_e;
 
   { The pointer position. }
   yaml_mark_s = record
-    index : QWord;         { The position index. }
-    line : QWord;          { The position line. }
-    column : QWord;        { The position column. }
+    index : QWord;                   { The position index. }
+    line : QWord;                    { The position line. }
+    column : QWord;                  { The position column. }
   end;
   yaml_mark_t = yaml_mark_s;
 
@@ -459,7 +460,7 @@ type
     the returned value should be 0. On EOF, the handler should set the
     @a size_read to 0 and return 1. }
   yaml_read_handler_t = function (data : Pointer; buffer : PByte; size : QWord;
-    size_read : PQWord) : Integer;
+    size_read : PQWord) : Integer of object;
 
   { This structure holds information about a potential simple key. }
   yaml_simple_key_s = record
@@ -523,7 +524,321 @@ type
   );
   yaml_parser_state_t = yaml_parser_state_e;
 
+  { This structure holds aliases data. }
+  yaml_alias_data_s = record
+    anchor : yaml_char_t;            { The anchor. }
+    index : Integer;                 { The node id. }
+    mark : yaml_mark_t;              { The anchor mark. }
+  end;
+  yaml_alias_data_t = yaml_alias_data_s;
 
+  { The parser structure.
+
+   All members are internal.  Manage the structure using the @c yaml_parser_
+   family of functions. }
+  yaml_parser_s = record
+    error : yaml_error_type_t;       { Error type. }
+    problem : PChar;                 { Error description. }
+    problem_offset : QWord;        { The byte about which the problem occured. }
+    problem_value : Integer;         { The problematic value (@c -1 is none). }
+    problem_mark : yaml_mark_t;      { The problem position. }
+    context : PChar;                 { The error context. }
+    context_mark : yaml_mark_t;      { The context position. }
+    read_handler : pyaml_read_handler_t; { Read handler. }
+    read_handler_data : Pointer;     { A pointer for passing to the read
+                                       handler. }
+    { Standard (string or file) input data. }
+    case input : Integer of
+    { String input data. }
+    1 : (string_data = record
+           start_string : PByte;     { The string start pointer. }
+           end_string : PByte;       { The string end pointer. }
+           current : PByte;          { The string current position. }
+         end;
+        );
+    { File input data. }
+    2 : (
+        file_pointer : Pointer;
+        );
+    eof : Integer;                   { EOF flag }
+    { The working buffer. }
+    buffer = record
+      buffer_start : pyaml_char_t;   { The beginning of the buffer. }
+      buffer_end : pyaml_char_t;     { The end of the buffer. }
+      buffer_pointer : yaml_char_t;  { The current position of the buffer. }
+      last : pyaml_char_t;           { The last filled position of the buffer. }
+    end;
+    unread : QWord;                  { The number of unread characters in the
+                                       buffer. }
+    { The raw buffer. }
+    raw_buffer = record
+      buffer_start : PByte;          { The beginning of the buffer. }
+      buffer_end : PByte;            { The end of the buffer. }
+      buffer_pointer : PByte;        { The current position of the buffer. }
+      last : PByte;                  { The last filled position of the buffer. }
+    end;
+    encoding : yaml_encoding_t;      { The input encoding. }
+    offset : QWord;                  { The offset of the current position (in
+                                       bytes). }
+    mark : yaml_mark_t;              { The mark of the current position. }
+    stream_start_produced : Integer; { Have we started to scan the input
+                                       stream? }
+    stream_end_produced : Integer;   { Have we reached the end of the input
+                                       stream? }
+    flow_level : Integer;            { The number of unclosed '[' and '{}'
+                                       indicators. }
+    { The tokens queue. }
+    tokens = record
+      token_start : pyaml_token_t;   { The beginning of the tokens queue. }
+      token_end : pyaml_token_t;     { The end of the tokens queue. }
+      token_head : pyaml_token_t;    { The head of the tokens queue. }
+      token_tail : pyaml_token_t;    { The tail of the tokens queue. }
+    end;
+    tokens_parsed : QWord;           { The number of tokens fetched from the
+                                       queue. }
+    token_available : Integer;       { Does the tokens queue contain a token
+                                       ready for dequeueing. }
+    { The indentation levels stack. }
+    indents = record
+      start_stack : PInteger;        { The beginning of the stack. }
+      end_stack : PInteger;          { The end of the stack. }
+      top_stack : PInteger;          { The top of the stack. }
+    end;
+    indent : Integer;                { The current indentation level. }
+    simple_key_allowed : Integer;    { May a simple key occur at the current
+                                       position? }
+    { The stack of simple keys. }
+    simple_keys = record
+      start_stack : pyaml_simple_key_t; { The beginning of the stack. }
+      end_stack : pyaml_simple_key_t;{ The end of the stack. }
+      top_stack : pyaml_simple_key_t;{ The top of the stack. }
+    end;
+
+    { The parser states stack. }
+    states = record
+      start_stack : pyaml_parser_state_t; { The beginning of the stack. }
+      end_stack : pyaml_parser_state_t;   { The end of the stack. }
+      top_stack : pyaml_parser_state_t;   { The top of the stack. }
+    end;
+    state : yaml_parser_state_t;     { The current parser state. }
+
+    { The stack of marks. }
+    marks = record
+      start_stack : pyaml_mark_t;    { The beginning of the stack. }
+      end_stack : pyaml_mark_t;      { The end of the stack. }
+      top_stack : pyaml_mark_t;      { The top of the stack. }
+    end;
+
+    { The list of TAG directives. }
+    tag_directives = record
+      start_list : pyaml_tag_directive_t; { The beginning of the list. }
+      end_list : pyaml_tag_directive_t;   { The end of the list. }
+      top_list : pyaml_tag_directive_t;   { The top of the list. }
+    end;
+
+    { The alias data. }
+    aliases = record
+      start_list : pyaml_alias_data_t;  { The beginning of the list. }
+      end_list : pyaml_alias_data_t;    { The end of the list. }
+      top_list : pyaml_alias_data_t;    { The top of the list. }
+    end;
+    document : pyaml_document_t;     { The currently parsed document. }
+  end;
+  yaml_parser_t = yaml_parser_s;
+
+  { The prototype of a write handler.
+
+    The write handler is called when the emitter needs to flush the accumulated
+    characters to the output.  The handler should write @a size bytes of the
+    @a buffer to the output.
+
+    @param[in,out]   data        A pointer to an application data specified by
+                               yaml_emitter_set_output().
+    @param[in]       buffer      The buffer with bytes to be written.
+    @param[in]       size        The size of the buffer.
+
+    @returns On success, the handler should return 1.  If the handler failed,
+    the returned value should be 0. }
+  yaml_write_handler_t = function (data : Pointer; buffer : PByte; size: QWord)
+    : Integer of object;
+
+  { The emitter states. }
+  yaml_emitter_state_e = (
+    { Expect STREAM-START. }
+    YAML_EMIT_STREAM_START_STATE,
+    { Expect the first DOCUMENT-START or STREAM-END. }
+    YAML_EMIT_FIRST_DOCUMENT_START_STATE,
+    { Expect DOCUMENT-START or STREAM-END. }
+    YAML_EMIT_DOCUMENT_START_STATE,
+    { Expect the content of a document. }
+    YAML_EMIT_DOCUMENT_CONTENT_STATE,
+    { Expect DOCUMENT-END. }
+    YAML_EMIT_DOCUMENT_END_STATE,
+    { Expect the first item of a flow sequence. }
+    YAML_EMIT_FLOW_SEQUENCE_FIRST_ITEM_STATE,
+    { Expect an item of a flow sequence. }
+    YAML_EMIT_FLOW_SEQUENCE_ITEM_STATE,
+    { Expect the first key of a flow mapping. }
+    YAML_EMIT_FLOW_MAPPING_FIRST_KEY_STATE,
+    { Expect a key of a flow mapping. }
+    YAML_EMIT_FLOW_MAPPING_KEY_STATE,
+    { Expect a value for a simple key of a flow mapping. }
+    YAML_EMIT_FLOW_MAPPING_SIMPLE_VALUE_STATE,
+    { Expect a value of a flow mapping. }
+    YAML_EMIT_FLOW_MAPPING_VALUE_STATE,
+    { Expect the first item of a block sequence. }
+    YAML_EMIT_BLOCK_SEQUENCE_FIRST_ITEM_STATE,
+    { Expect an item of a block sequence. }
+    YAML_EMIT_BLOCK_SEQUENCE_ITEM_STATE,
+    { Expect the first key of a block mapping. }
+    YAML_EMIT_BLOCK_MAPPING_FIRST_KEY_STATE,
+    { Expect the key of a block mapping. }
+    YAML_EMIT_BLOCK_MAPPING_KEY_STATE,
+    { Expect a value for a simple key of a block mapping. }
+    YAML_EMIT_BLOCK_MAPPING_SIMPLE_VALUE_STATE,
+    { Expect a value of a block mapping. }
+    YAML_EMIT_BLOCK_MAPPING_VALUE_STATE,
+    { Expect nothing. }
+    YAML_EMIT_END_STATE
+  );
+  yaml_emitter_state_t = yaml_emitter_state_e;
+
+  { The emitter structure.
+
+   All members are internal.  Manage the structure using the @c yaml_emitter_
+   family of functions. }
+  yaml_emitter_s = record
+    error : yaml_error_type_t;       { Error type. }
+    problem : PChar;                 { Error description. }
+    write_handler : pyaml_write_handler_t; { Write handler. }
+    write_handler_data : Pointer;    { A pointer for passing to the white
+                                       handler. }
+    { Standard (string or file) output data. }
+    case output : Integer of
+    { String output data. }
+    1 : (string_output = record
+           buffer : PChar;           { The buffer pointer. }
+           size : QWord;             { The buffer size. }
+           size_written : PQWord;    { The number of written bytes. }
+         end;
+        );
+    { File output data. }
+    2 : (
+          file_handle : Pointer;     { File output data. }
+        );
+
+    { The working buffer. }
+    buffer = record
+      start_buffer : pyaml_char_t;   { The beginning of the buffer. }
+      end_buffer : pyaml_char_t;     { The end of the buffer. }
+      pointer : pyaml_char_t;        { The current position of the buffer. }
+      last : pyaml_char_t;           { The last filled position of the buffer. }
+    end;
+
+    { The raw buffer. }
+    raw_buffer = record
+      start_buffer : PByte;          { The beginning of the buffer. }
+      end_buffer : PByte;            { The end of the buffer. }
+      pointer : PByte;               { The current position of the buffer. }
+      last : PByte;                  { The last filled position of the buffer. }
+    end;
+
+    encoding : yaml_encoding_t;      { The stream encoding. }
+    cannonical : Integer;            { If the output is in the canonical style?}
+    best_indent : Integer;           { The number of indentation spaces. }
+    best_width : Integer;            { The preferred width of the output lines.}
+    unicode : Integer;               { Allow unescaped non-ASCII characters? }
+    line_break : yaml_break_t;       { The preferred line break. }
+
+    { The stack of states. }
+    states = record
+      start_stack : pyaml_emitter_state_t; { The beginning of the stack. }
+      end_stack : pyaml_emitter_state_t;   { The end of the stack. }
+      top_stack : pyaml_emitter_state_t;   { The top of the stack. }
+    end;
+
+    state : yaml_emitter_state_t;    { The current emitter state. }
+    { The event queue. }
+    events = record
+      start_queue : pyaml_event_t;   { The beginning of the event queue. }
+      end_queue : pyaml_event_t;     { The end of the event queue. }
+      head_queue : pyaml_event_t;    { The head of the event queue. }
+      tail : pyaml_event_t;          { The tail of the event queue. }
+    end;
+
+    { The stack of indentation levels. }
+    indents = record
+      start_stack : PInteger;        { The beginning of the stack. }
+      end_stack : PInteger;          { The end of the stack. }
+      top_stack : PInteger;          { The top of the stack. }
+    end;
+
+    { The list of tag directives. }
+    tag_directives = record
+      start_list : pyaml_tag_directive_t; { The beginning of the list. }
+      end_list : pyaml_tag_directive_t;   { The end of the list. }
+      top_list : pyaml_tag_directive_t;   { The top of the list. }
+    end;
+
+    indent : Integer;                { The current indentation level. }
+    flow_level : Integer;            { The current flow level. }
+    root_context : Integer;          { Is it the document root context? }
+    sequence_context : Integer;      { Is it a sequence context? }
+    mapping_context : Integer;       { Is it a mapping context? }
+    simple_key_context : Integer;    { Is it a simple mapping key context? }
+    line : Integer;                  { The current line. }
+    column : Integer;                { The current column. }
+    whitespace : Integer;            { If the last character was a whitespace? }
+    indention : Integer;             { If the last character was an indentation
+                                       character (' ', '-', '?', ':')? }
+    open_ended : Integer;            { If an explicit document end is required?}
+
+    { Anchor analysis. }
+    anchor_data = record
+      anchor : pyaml_char_t;         { The anchor value. }
+      anchor_length : QWord;         { The anchor length. }
+      anchor_alias : Integer;        { Is it an alias? }
+    end;
+
+    { Tag analysis. }
+    tag_data = record
+      handle : pyaml_char_t;         { The tag handle. }
+      handle_length : QWord;         { The tag handle length. }
+      suffix : pyaml_char_t;         { The tag suffix. }
+      suffix_length : QWord;         { The tag suffix length. }
+    end;
+
+    { Scalar analysis. }
+    scalar_data = record
+      value : pyaml_char_t;          { The scalar value. }
+      length : QWord;                { The scalar length. }
+      multiline : Integer;           { Does the scalar contain line breaks? }
+      flow_plain_allowed : Integer;  { Can the scalar be expessed in the flow
+                                       plain style? }
+      block_plain_allowed : Integer; { Can the scalar be expressed in the block
+                                       plain style? }
+      single_quoted_allowed : Integer; { Can the scalar be expressed in the
+                                       single quoted style? }
+      block_allowed : Integer;       { Can the scalar be expressed in the
+                                       literal or folded styles? }
+      style : yaml_scalar_style_t;   { The output style. }
+    end;
+
+    opened : Integer;                { If the stream was already opened? }
+    closed : Integer;                { If the stream was already closed? }
+
+    { The information associated with the document nodes. }
+    panchors = ^anchors;
+    anchors = record
+      references : Integer;          { The number of references. }
+      anchor : Integer;              { The anchor id. }
+      serialized : Integer;          { If the node has been emitted? }
+    end;
+
+    last_anchor_id : Integer;        { The last assigned anchor id. }
+    document : pyaml_document_t;     { The currently emitted document. }
+  end;
+  yaml_emitter_t = yaml_emitter_s;
 
 {$IFDEF WINDOWS}
   const libYaml = 'libyaml.dll';
@@ -808,10 +1123,273 @@ function yaml_document_append_mapping_pair (document : pyaml_document_t;
   mapping : Integer; key : Integer; value : Integer) : Integer; cdecl;
   external libYaml;
 
+{ Initialize a parser.
 
+  This function creates a new parser object.  An application is responsible
+  for destroying the object using the yaml_parser_delete() function.
 
+  @param[out]      parser  An empty parser object.
 
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_parser_initialize (parser : pyaml_parser_t) : Integer; cdecl;
+  external libYaml;
 
+{ Destroy a parser.
+
+  @param[in,out]   parser  A parser object. }
+procedure yaml_parser_delete (parser : pyaml_parser_t); cdecl; external libYaml;
+
+{ Set a string input.
+
+  Note that the @a input pointer must be valid while the @a parser object
+  exists.  The application is responsible for destroing @a input after
+  destroying the @a parser.
+
+  @param[in,out]   parser  A parser object.
+  @param[in]       input   A source data.
+  @param[in]       size    The length of the source data in bytes. }
+procedure yaml_parser_set_input_string (parser : pyaml_parser_t; input :
+  PByte; size : QWord); cdecl; external libYaml;
+
+{ Set a file input.
+
+  @a file should be a file object open for reading.  The application is
+  responsible for closing the @a file.
+
+  @param[in,out]   parser  A parser object.
+  @param[in]       file    An open file. }
+procedure yaml_parser_set_input_file (parser : pyaml_parser_t; file_pointer :
+  Pointer); cdecl; external libYaml;
+
+{ Set a generic input handler.
+
+  @param[in,out]   parser  A parser object.
+  @param[in]       handler A read handler.
+  @param[in]       data    Any application data for passing to the read
+                           handler. }
+procedure yaml_parser_set_input (parser : pyaml_parser_t; handler :
+  pyaml_read_handler_t; data : Pointer); cdecl; external libYaml;
+
+{ Set the source encoding.
+
+  @param[in,out]   parser      A parser object.
+  @param[in]       encoding    The source encoding. }
+procedure yaml_parser_set_encoding (parser : pyaml_parser_t; encoding :
+  yaml_encoding_t); cdecl; external libYaml;
+
+{ Scan the input stream and produce the next token.
+
+  Call the function subsequently to produce a sequence of tokens corresponding
+  to the input stream.  The initial token has the type
+  @c YAML_STREAM_START_TOKEN while the ending token has the type
+  @c YAML_STREAM_END_TOKEN.
+
+  An application is responsible for freeing any buffers associated with the
+  produced token object using the @c yaml_token_delete function.
+
+  An application must not alternate the calls of yaml_parser_scan() with the
+  calls of yaml_parser_parse() or yaml_parser_load(). Doing this will break
+  the parser.
+
+  @param[in,out]   parser      A parser object.
+  @param[out]      token       An empty token object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_parser_scan (parser : pyaml_parser_t; token : pyaml_token_t) :
+  Integer; cdecl; external libYaml;
+
+{ Parse the input stream and produce the next parsing event.
+
+  Call the function subsequently to produce a sequence of events corresponding
+  to the input stream.  The initial event has the type
+  @c YAML_STREAM_START_EVENT while the ending event has the type
+  @c YAML_STREAM_END_EVENT.
+
+  An application is responsible for freeing any buffers associated with the
+  produced event object using the yaml_event_delete() function.
+
+  An application must not alternate the calls of yaml_parser_parse() with the
+  calls of yaml_parser_scan() or yaml_parser_load(). Doing this will break the
+  parser.
+
+  @param[in,out]   parser      A parser object.
+  @param[out]      event       An empty event object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_parser_parse (parser : pyaml_parser_t; event : pyaml_event_t) :
+  Integer; cdecl; external libYaml;
+
+{ Parse the input stream and produce the next YAML document.
+
+  Call this function subsequently to produce a sequence of documents
+  constituting the input stream.
+
+  If the produced document has no root node, it means that the document
+  end has been reached.
+
+  An application is responsible for freeing any data associated with the
+  produced document object using the yaml_document_delete() function.
+
+  An application must not alternate the calls of yaml_parser_load() with the
+  calls of yaml_parser_scan() or yaml_parser_parse(). Doing this will break
+  the parser.
+
+  @param[in,out]   parser      A parser object.
+  @param[out]      document    An empty document object.
+
+  @return 1 if the function succeeded, 0 on error. }
+function yaml_parser_load (parser : pyaml_parser_t; document :
+  pyaml_document_t) : Integer; cdecl; external libYaml;
+
+{ Initialize an emitter.
+
+  This function creates a new emitter object.  An application is responsible
+  for destroying the object using the yaml_emitter_delete() function.
+
+  @param[out]      emitter     An empty parser object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_emitter_initialize (emitter : pyaml_emitter_t) : Integer; cdecl;
+  external libYaml;
+
+{ Destroy an emitter.
+
+  @param[in,out]   emitter     An emitter object. }
+procedure yaml_emitter_delete (emitter : pyaml_emitter_t); cdecl;
+  external libYaml;
+
+{ Set a string output.
+
+  The emitter will write the output characters to the @a output buffer of the
+  size @a size.  The emitter will set @a size_written to the number of written
+  bytes.  If the buffer is smaller than required, the emitter produces the
+  YAML_WRITE_ERROR error.
+
+  @param[in,out]   emitter         An emitter object.
+  @param[in]       output          An output buffer.
+  @param[in]       size            The buffer size.
+  @param[in]       size_written    The pointer to save the number of written
+                                   bytes. }
+procedure yaml_emitter_set_output_string (emitter : pyaml_emitter_t;
+  output : PByte; size : QWord; size_written : PQword); cdecl; external libYaml;
+
+{ Set a file output.
+
+  @a file should be a file object open for writing.  The application is
+  responsible for closing the @a file.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       file        An open file. }
+procedure yaml_emitter_set_output_file (emitter : pyaml_emitter_t; file_handle :
+  Pointer); cdecl; external libYaml;
+
+{ Set a generic output handler.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       handler     A write handler.
+  @param[in]       data        Any application data for passing to the write
+                               handler. }
+procedure yaml_emitter_set_output (emitter : pyaml_emitter_t; handler :
+  pyaml_write_handler_t; data : Pointer); cdecl; external libYaml;
+
+{ Set the output encoding.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       encoding    The output encoding. }
+procedure yaml_emitter_set_encoding (emitter : pyaml_emitter_t; encoding :
+  yaml_encoding_t); cdecl; external libYaml;
+
+{ Set if the output should be in the "canonical" format as in the YAML
+  specification.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       canonical   If the output is canonical. }
+procedure yaml_emitter_set_canonical (emitter : pyaml_emitter_t; cannonical :
+  Integer); cdecl; external libYaml;
+
+{ Set the intendation increment.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       indent      The indentation increment (1 < . < 10). }
+procedure yaml_emitter_set_indent (emitter : pyaml_emitter_t; indent : Integer);
+  cdecl; external libYaml;
+
+{ Set the preferred line width. @c -1 means unlimited.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       width       The preferred line width. }
+procedure yaml_emitter_set_width (emitter : pyaml_emitter_t; width : Integer);
+  cdecl; external libYaml;
+
+{ Set if unescaped non-ASCII characters are allowed.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       unicode     If unescaped Unicode characters are allowed. }
+procedure yaml_emitter_set_unicode (emitter : pyaml_emitter_t; unicode :
+  Integer); cdecl; external libYaml;
+
+{ Set the preferred line break.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in]       line_break  The preferred line break. }
+procedure yaml_emitter_set_break (emitter : pyaml_emitter_t; line_break :
+  yaml_break_t); cdecl; external libYaml;
+
+{ Emit an event.
+
+  The event object may be generated using the yaml_parser_parse() function.
+  The emitter takes the responsibility for the event object and destroys its
+  content after it is emitted. The event object is destroyed even if the
+  function fails.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in,out]   event       An event object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_emitter_emit (emitter : pyaml_emitter_t; event : pyaml_event_t) :
+  Integer; cdecl; external libYaml;
+
+{ Start a YAML stream.
+
+  This function should be used before yaml_emitter_dump() is called.
+
+  @param[in,out]   emitter     An emitter object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_emitter_open (emitter : pyaml_emitter_t) : Integer; cdecl;
+  external libYaml;
+
+{ Finish a YAML stream.
+
+  This function should be used after yaml_emitter_dump() is called.
+
+  @param[in,out]   emitter     An emitter object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_emitter_close (emitter : pyaml_emitter_t) : Integer; cdecl;
+  external libYaml;
+
+{ Emit a YAML document.
+
+  The documen object may be generated using the yaml_parser_load() function
+  or the yaml_document_initialize() function.  The emitter takes the
+  responsibility for the document object and destoys its content after
+  it is emitted. The document object is destroyedeven if the function fails.
+
+  @param[in,out]   emitter     An emitter object.
+  @param[in,out]   document    A document object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_emitter_dump (emitter : pyaml_emitter_t; document :
+  pyaml_document_t) : Integer; cdecl; external libYaml;
+
+{ Flush the accumulated characters to the output.
+
+  @param[in,out]   emitter     An emitter object.
+
+  @returns 1 if the function succeeded, 0 on error. }
+function yaml_emitter_flush (emitter : pyaml_emitter_t) : Integer; cdecl;
+  external libYaml;
 
 implementation
 
