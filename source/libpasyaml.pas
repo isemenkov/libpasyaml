@@ -81,6 +81,7 @@ type
     major : Integer; { The major version number. }
     minor : Integer; { The minor version number. }
   end;
+  pyaml_version_directive_t = ^yaml_version_directive_t;
   yaml_version_directive_t = yaml_version_directive_s;
 
   { The tag directive data. }
@@ -88,6 +89,7 @@ type
     handle : pyaml_char_t; { The tag handle. }
     prefix : pyaml_char_t; { The tag prefix. }
   end;
+  pyaml_tag_directive_t = ^yaml_tag_directive_t;
   yaml_tag_directive_t = yaml_tag_directive_s;
 
   { The stream encoding. }
@@ -128,6 +130,7 @@ type
     line : QWord;                    { The position line. }
     column : QWord;                  { The position column. }
   end;
+  pyaml_mark_t = ^yaml_mark_t;
   yaml_mark_t = yaml_mark_s;
 
   { Scalar styles. }
@@ -184,11 +187,8 @@ type
   );
   yaml_token_type_t = yaml_token_type_e;
 
-  { The token structure. }
-  yaml_token_s = record
-    token_type : yaml_token_type_t;  { The token type. }
-    { The token data. }
-    case token : Integer of
+  _yaml_token_token_t = record
+    case Integer of
       { The stream start (for @c YAML_STREAM_START_TOKEN). }
       1 : (stream_start : record
              { The stream encoding. }
@@ -241,9 +241,17 @@ type
              prefix : pyaml_char_t;
            end;
           );
+  end;
+
+  { The token structure. }
+  yaml_token_s = record
+    token_type : yaml_token_type_t;  { The token type. }
+    { The token data. }
+    token : _yaml_token_token_t;
     start_mark : yaml_mark_t;        { The beginning of the token. }
     end_mark : yaml_mark_t;          { The end of the token. }
   end;
+  pyaml_token_t = ^yaml_token_t;
   yaml_token_t = yaml_token_s;
 
   { Event types. }
@@ -262,10 +270,8 @@ type
   );
   yaml_event_type_t = yaml_event_type_e;
 
-  { The event structure. }
-  yaml_event_s = record
-    event_type : yaml_event_type_t;  { The event type. }
-    case data : Integer of
+  _yaml_event_data_t = record
+    case Integer of
     { The stream parameters (for @c YAML_STREAM_START_EVENT). }
     1 : (stream_start : record
            { The document encoding. }
@@ -341,6 +347,12 @@ type
          style : yaml_mapping_style_t;
          end;
         );
+  end;
+
+  { The event structure. }
+  yaml_event_s = record
+    event_type : yaml_event_type_t;  { The event type. }
+    data : _yaml_event_data_t;
     start_mark : yaml_mark_t;        { The beginning of the event. }
     end_mark : yaml_mark_t;          { The end of the event. }
   end;
@@ -364,17 +376,15 @@ type
     key : Integer;                   { The key of the element. }
     value : Integer;                 { The value of the element. }
   end;
+  pyaml_node_pair_t = ^yaml_node_pair_t;
   yaml_node_pair_t = yaml_node_pair_s;
 
-  { The node structure. }
   pyaml_node_item_t = ^yaml_node_item_t;
-  yaml_node_s = record
-    node_type : yaml_node_type_t;    { The node type. }
-    tag : pyaml_char_t;              { The node tag. }
-    { The node data. }
-    case data : Integer of
+
+  _yaml_node_data_t = record
+    case Integer of
     { The scalar parameters (for @c YAML_SCALAR_NODE). }
-    1 : (scalar = record
+    1 : (scalar : record
            { The scalar value. }
            value : pyaml_char_t;
            { The length of the scalar value. }
@@ -384,9 +394,9 @@ type
          end;
         );
     { The sequence parameters (for @c YAML_SEQUENCE_NODE). }
-    2 : (sequence = record
+    2 : (sequence : record
            { The stack of sequence items. }
-           items = record
+           items : record
              { The beginning of the stack. }
              start_item : pyaml_node_item_t;
              { The end of the stack. }
@@ -401,7 +411,7 @@ type
     { The mapping parameters (for @c YAML_MAPPING_NODE). }
     3 : (mapping : record
            { The stack of mapping pairs (key, value). }
-           pairs = record
+           pairs : record
              { The beginning of the stack. }
              start_stack : pyaml_node_pair_t;
              { The end of the stack. }
@@ -413,15 +423,24 @@ type
            style : yaml_mapping_style_t;
          end;
         );
+  end;
+
+  { The node structure. }
+  yaml_node_s = record
+    node_type : yaml_node_type_t;    { The node type. }
+    tag : pyaml_char_t;              { The node tag. }
+    { The node data. }
+    data : _yaml_node_data_t;
     start_mark : yaml_mark_t;        { The beginning of the node. }
     end_mark : yaml_mark_t;          { The end of the node. }
   end;
-  yaml_node_item_t = yaml_node_s;
+  pyaml_node_t = ^yaml_node_t;
+  yaml_node_t = yaml_node_s;
 
   { The document structure. }
   yaml_document_s = record
     { The document nodes. }
-    nodes = record
+    nodes : record
       { The beginning of the stack. }
       start_stack : pyaml_node_t;
       { The end of the stack. }
@@ -431,7 +450,7 @@ type
     end;
     version_directive : pyaml_version_directive_t; { The version directive. }
     { The list of tag directives. }
-    tag_directives = record
+    tag_directives : record
       { The beginning of the tag directives list. }
       start_list : pyaml_tag_directive_t;
       { The end of the tag directives list. }
@@ -442,6 +461,7 @@ type
     start_mark : yaml_mark_t;        { The beginning of the document. }
     end_mark : yaml_mark_t;          { The end of the document. }
   end;
+  pyaml_document_t = ^yaml_document_t;
   yaml_document_t = yaml_document_s;
 
   { The prototype of a read handler.
@@ -459,6 +479,7 @@ type
     @returns On success, the handler should return 1.  If the handler failed,
     the returned value should be 0. On EOF, the handler should set the
     @a size_read to 0 and return 1. }
+  pyaml_read_handler_t = ^yaml_read_handler_t;
   yaml_read_handler_t = function (data : Pointer; buffer : PByte; size : QWord;
     size_read : PQWord) : Integer of object;
 
@@ -469,12 +490,13 @@ type
     token_number : QWord;            { The number of the token. }
     mark : yaml_mark_t;              { The position mark. }
   end;
+  pyaml_simple_key_t = ^yaml_simple_key_t;
   yaml_simple_key_t = yaml_simple_key_s;
 
   { The states of the parser. }
   yaml_parser_state_e = (
     { Expect STREAM-START. }
-    YAML_PARSE_STREAM_START_STATE.
+    YAML_PARSE_STREAM_START_STATE,
     { Expect the beginning of an implicit document. }
     YAML_PARSE_IMPLICIT_DOCUMENT_START_STATE,
     { Expect DOCUMENT-START. }
@@ -522,6 +544,7 @@ type
     { Expect nothing. }
     YAML_PARSE_END_STATE
   );
+  pyaml_parser_state_t = ^yaml_parser_state_t;
   yaml_parser_state_t = yaml_parser_state_e;
 
   { This structure holds aliases data. }
@@ -530,12 +553,28 @@ type
     index : Integer;                 { The node id. }
     mark : yaml_mark_t;              { The anchor mark. }
   end;
+  pyaml_alias_data_t = ^yaml_alias_data_t;
   yaml_alias_data_t = yaml_alias_data_s;
 
   { The parser structure.
 
    All members are internal.  Manage the structure using the @c yaml_parser_
    family of functions. }
+  yaml_parser_input_t = record
+    case input : Integer of
+    { String input data. }
+    1 : (string_data : record
+           start_string : PByte;     { The string start pointer. }
+           end_string : PByte;       { The string end pointer. }
+           current : PByte;          { The string current position. }
+         end;
+        );
+    { File input data. }
+    2 : (
+        file_pointer : Pointer;
+        );
+  end;
+
   yaml_parser_s = record
     error : yaml_error_type_t;       { Error type. }
     problem : PChar;                 { Error description. }
@@ -548,21 +587,10 @@ type
     read_handler_data : Pointer;     { A pointer for passing to the read
                                        handler. }
     { Standard (string or file) input data. }
-    case input : Integer of
-    { String input data. }
-    1 : (string_data = record
-           start_string : PByte;     { The string start pointer. }
-           end_string : PByte;       { The string end pointer. }
-           current : PByte;          { The string current position. }
-         end;
-        );
-    { File input data. }
-    2 : (
-        file_pointer : Pointer;
-        );
+    input : yaml_parser_input_t;
     eof : Integer;                   { EOF flag }
     { The working buffer. }
-    buffer = record
+    buffer : record
       buffer_start : pyaml_char_t;   { The beginning of the buffer. }
       buffer_end : pyaml_char_t;     { The end of the buffer. }
       buffer_pointer : yaml_char_t;  { The current position of the buffer. }
@@ -571,7 +599,7 @@ type
     unread : QWord;                  { The number of unread characters in the
                                        buffer. }
     { The raw buffer. }
-    raw_buffer = record
+    raw_buffer : record
       buffer_start : PByte;          { The beginning of the buffer. }
       buffer_end : PByte;            { The end of the buffer. }
       buffer_pointer : PByte;        { The current position of the buffer. }
@@ -588,7 +616,7 @@ type
     flow_level : Integer;            { The number of unclosed '[' and '{}'
                                        indicators. }
     { The tokens queue. }
-    tokens = record
+    tokens : record
       token_start : pyaml_token_t;   { The beginning of the tokens queue. }
       token_end : pyaml_token_t;     { The end of the tokens queue. }
       token_head : pyaml_token_t;    { The head of the tokens queue. }
@@ -599,7 +627,7 @@ type
     token_available : Integer;       { Does the tokens queue contain a token
                                        ready for dequeueing. }
     { The indentation levels stack. }
-    indents = record
+    indents : record
       start_stack : PInteger;        { The beginning of the stack. }
       end_stack : PInteger;          { The end of the stack. }
       top_stack : PInteger;          { The top of the stack. }
@@ -608,14 +636,14 @@ type
     simple_key_allowed : Integer;    { May a simple key occur at the current
                                        position? }
     { The stack of simple keys. }
-    simple_keys = record
+    simple_keys : record
       start_stack : pyaml_simple_key_t; { The beginning of the stack. }
       end_stack : pyaml_simple_key_t;{ The end of the stack. }
       top_stack : pyaml_simple_key_t;{ The top of the stack. }
     end;
 
     { The parser states stack. }
-    states = record
+    states : record
       start_stack : pyaml_parser_state_t; { The beginning of the stack. }
       end_stack : pyaml_parser_state_t;   { The end of the stack. }
       top_stack : pyaml_parser_state_t;   { The top of the stack. }
@@ -623,27 +651,28 @@ type
     state : yaml_parser_state_t;     { The current parser state. }
 
     { The stack of marks. }
-    marks = record
+    marks : record
       start_stack : pyaml_mark_t;    { The beginning of the stack. }
       end_stack : pyaml_mark_t;      { The end of the stack. }
       top_stack : pyaml_mark_t;      { The top of the stack. }
     end;
 
     { The list of TAG directives. }
-    tag_directives = record
+    tag_directives : record
       start_list : pyaml_tag_directive_t; { The beginning of the list. }
       end_list : pyaml_tag_directive_t;   { The end of the list. }
       top_list : pyaml_tag_directive_t;   { The top of the list. }
     end;
 
     { The alias data. }
-    aliases = record
+    aliases : record
       start_list : pyaml_alias_data_t;  { The beginning of the list. }
       end_list : pyaml_alias_data_t;    { The end of the list. }
       top_list : pyaml_alias_data_t;    { The top of the list. }
     end;
     document : pyaml_document_t;     { The currently parsed document. }
   end;
+  pyaml_parser_t = ^yaml_parser_t;
   yaml_parser_t = yaml_parser_s;
 
   { The prototype of a write handler.
@@ -659,6 +688,7 @@ type
 
     @returns On success, the handler should return 1.  If the handler failed,
     the returned value should be 0. }
+  pyaml_write_handler_t = ^yaml_write_handler_t;
   yaml_write_handler_t = function (data : Pointer; buffer : PByte; size: QWord)
     : Integer of object;
 
@@ -701,22 +731,18 @@ type
     { Expect nothing. }
     YAML_EMIT_END_STATE
   );
+  pyaml_emitter_state_t = ^yaml_emitter_state_t;
   yaml_emitter_state_t = yaml_emitter_state_e;
 
   { The emitter structure.
 
    All members are internal.  Manage the structure using the @c yaml_emitter_
    family of functions. }
-  yaml_emitter_s = record
-    error : yaml_error_type_t;       { Error type. }
-    problem : PChar;                 { Error description. }
-    write_handler : pyaml_write_handler_t; { Write handler. }
-    write_handler_data : Pointer;    { A pointer for passing to the white
-                                       handler. }
-    { Standard (string or file) output data. }
-    case output : Integer of
+
+  _yaml_emitter_output_t = record
+    case Integer of
     { String output data. }
-    1 : (string_output = record
+    1 : (string_output : record
            buffer : PChar;           { The buffer pointer. }
            size : QWord;             { The buffer size. }
            size_written : PQWord;    { The number of written bytes. }
@@ -726,9 +752,26 @@ type
     2 : (
           file_handle : Pointer;     { File output data. }
         );
+  end;
+
+  _pyaml_emitter_anchors_t = ^_yaml_emitter_anchors_t;
+  _yaml_emitter_anchors_t = record
+    references : Integer;          { The number of references. }
+    anchor : Integer;              { The anchor id. }
+    serialized : Integer;          { If the node has been emitted? }
+  end;
+
+  yaml_emitter_s = record
+    error : yaml_error_type_t;       { Error type. }
+    problem : PChar;                 { Error description. }
+    write_handler : pyaml_write_handler_t; { Write handler. }
+    write_handler_data : Pointer;    { A pointer for passing to the white
+                                       handler. }
+    { Standard (string or file) output data. }
+    output : _yaml_emitter_output_t;
 
     { The working buffer. }
-    buffer = record
+    buffer : record
       start_buffer : pyaml_char_t;   { The beginning of the buffer. }
       end_buffer : pyaml_char_t;     { The end of the buffer. }
       pointer : pyaml_char_t;        { The current position of the buffer. }
@@ -736,7 +779,7 @@ type
     end;
 
     { The raw buffer. }
-    raw_buffer = record
+    raw_buffer : record
       start_buffer : PByte;          { The beginning of the buffer. }
       end_buffer : PByte;            { The end of the buffer. }
       pointer : PByte;               { The current position of the buffer. }
@@ -751,7 +794,7 @@ type
     line_break : yaml_break_t;       { The preferred line break. }
 
     { The stack of states. }
-    states = record
+    states : record
       start_stack : pyaml_emitter_state_t; { The beginning of the stack. }
       end_stack : pyaml_emitter_state_t;   { The end of the stack. }
       top_stack : pyaml_emitter_state_t;   { The top of the stack. }
@@ -759,7 +802,7 @@ type
 
     state : yaml_emitter_state_t;    { The current emitter state. }
     { The event queue. }
-    events = record
+    events : record
       start_queue : pyaml_event_t;   { The beginning of the event queue. }
       end_queue : pyaml_event_t;     { The end of the event queue. }
       head_queue : pyaml_event_t;    { The head of the event queue. }
@@ -767,14 +810,14 @@ type
     end;
 
     { The stack of indentation levels. }
-    indents = record
+    indents : record
       start_stack : PInteger;        { The beginning of the stack. }
       end_stack : PInteger;          { The end of the stack. }
       top_stack : PInteger;          { The top of the stack. }
     end;
 
     { The list of tag directives. }
-    tag_directives = record
+    tag_directives : record
       start_list : pyaml_tag_directive_t; { The beginning of the list. }
       end_list : pyaml_tag_directive_t;   { The end of the list. }
       top_list : pyaml_tag_directive_t;   { The top of the list. }
@@ -794,14 +837,14 @@ type
     open_ended : Integer;            { If an explicit document end is required?}
 
     { Anchor analysis. }
-    anchor_data = record
+    anchor_data : record
       anchor : pyaml_char_t;         { The anchor value. }
       anchor_length : QWord;         { The anchor length. }
       anchor_alias : Integer;        { Is it an alias? }
     end;
 
     { Tag analysis. }
-    tag_data = record
+    tag_data : record
       handle : pyaml_char_t;         { The tag handle. }
       handle_length : QWord;         { The tag handle length. }
       suffix : pyaml_char_t;         { The tag suffix. }
@@ -809,7 +852,7 @@ type
     end;
 
     { Scalar analysis. }
-    scalar_data = record
+    scalar_data : record
       value : pyaml_char_t;          { The scalar value. }
       length : QWord;                { The scalar length. }
       multiline : Integer;           { Does the scalar contain line breaks? }
@@ -828,16 +871,12 @@ type
     closed : Integer;                { If the stream was already closed? }
 
     { The information associated with the document nodes. }
-    panchors = ^anchors;
-    anchors = record
-      references : Integer;          { The number of references. }
-      anchor : Integer;              { The anchor id. }
-      serialized : Integer;          { If the node has been emitted? }
-    end;
+    anchors : _pyaml_emitter_anchors_t;
 
     last_anchor_id : Integer;        { The last assigned anchor id. }
     document : pyaml_document_t;     { The currently emitted document. }
   end;
+  pyaml_emitter_t = ^yaml_emitter_t;
   yaml_emitter_t = yaml_emitter_s;
 
 {$IFDEF WINDOWS}
