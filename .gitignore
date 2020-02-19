@@ -1,3 +1,7 @@
+#unit-tests
+/unit-tests/libpasyaml_testproject.fpcunit.ini
+/unit-tests/libpasyaml_testproject.ico
+
 # Delphi compiler-generated binaries (safe to delete)
 *.exe
 *.dll
