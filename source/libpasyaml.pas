@@ -187,8 +187,12 @@ type
   );
   yaml_token_type_t = yaml_token_type_e;
 
-  _yaml_token_token_t = record
-    case Integer of
+  { The token structure. }
+  yaml_token_s = record
+    token_type : yaml_token_type_t;  { The token type. }
+    { The token data. }
+    token : record
+      case Integer of
       { The stream start (for @c YAML_STREAM_START_TOKEN). }
       1 : (stream_start : record
              { The stream encoding. }
@@ -241,13 +245,7 @@ type
              prefix : pyaml_char_t;
            end;
           );
-  end;
-
-  { The token structure. }
-  yaml_token_s = record
-    token_type : yaml_token_type_t;  { The token type. }
-    { The token data. }
-    token : _yaml_token_token_t;
+    end;
     start_mark : yaml_mark_t;        { The beginning of the token. }
     end_mark : yaml_mark_t;          { The end of the token. }
   end;
@@ -270,89 +268,87 @@ type
   );
   yaml_event_type_t = yaml_event_type_e;
 
-  _yaml_event_data_t = record
-    case Integer of
-    { The stream parameters (for @c YAML_STREAM_START_EVENT). }
-    1 : (stream_start : record
-           { The document encoding. }
-           encoding : yaml_encoding_t;
-         end;
-        );
-    { The document parameters (for @c YAML_DOCUMENT_START_EVENT). }
-    2 : (document_start : record
-           { The version directive. }
-           version_directive : pyaml_version_directive_t;
-           { The list of tag directives }
-           tag_directives : record
-             { The beginning of the tag directives list. }
-             start : pyaml_tag_directive_t;
-             { The end of the tag directives list. }
-             end_tag : pyaml_tag_directive_t;
-           end;
-           { Is the document indicator implicit? }
-           implicit : Integer;
-         end;
-        );
-    { The document end parameters (for @c YAML_DOCUMENT_END_EVENT). }
-    3 : (document_end : record
-           { Is the document end indicator implicit? }
-           implicit : Integer;
-         end;
-        );
-    { The alias parameters (for @c YAML_ALIAS_EVENT). }
-    4: (alias_param : record
-          { The anchor. }
-          anchor : pyaml_char_t;
-        end;
-       );
-    { The scalar parameters (for @c YAML_SCALAR_EVENT). }
-    5 : (scalar : record
-         { The anchor. }
-         anchor : pyaml_char_t;
-         { The tag. }
-         tag : pyaml_char_t;
-         { The scalar value. }
-         value : pyaml_char_t;
-         { The length of the scalar value. }
-         length : QWord;
-         { Is the tag optional for the plain style? }
-         plain_implicit : Integer;
-         { Is the tag optional for any non-plain style? }
-         quoted_implicit : Integer;
-         { The scalar style. }
-         style : yaml_scalar_style_t;
-         end;
-        );
-    { The sequence parameters (for @c YAML_SEQUENCE_START_EVENT). }
-    6 : (sequence_start : record
-         { The anchor. }
-         anchor : pyaml_char_t;
-         { The tag. }
-         tag : pyaml_char_t;
-         { Is the tag optional? }
-         implicit : Integer;
-         { The sequence style. }
-         style : yaml_sequence_style_t;
-         end;
-        );
-    { The mapping parameters (for @c YAML_MAPPING_START_EVENT). }
-    7 : (mapping_start : record
-         { The anchor. }
-         anchor : pyaml_char_t;
-         { The tag. }
-         tag : pyaml_char_t;
-         { Is the tag optional? }
-         implicit : Integer;
-         { The mapping style. }
-         style : yaml_mapping_style_t;
-         end;
-        );
-  end;
-
   { The event structure. }
   yaml_event_s = record
     event_type : yaml_event_type_t;  { The event type. }
-    data : _yaml_event_data_t;
+    data : record
+      case Integer of
+      { The stream parameters (for @c YAML_STREAM_START_EVENT). }
+      1 : (stream_start : record
+             { The document encoding. }
+             encoding : yaml_encoding_t;
+           end;
+          );
+      { The document parameters (for @c YAML_DOCUMENT_START_EVENT). }
+      2 : (document_start : record
+             { The version directive. }
+             version_directive : pyaml_version_directive_t;
+             { The list of tag directives }
+             tag_directives : record
+               { The beginning of the tag directives list. }
+               start : pyaml_tag_directive_t;
+               { The end of the tag directives list. }
+               end_tag : pyaml_tag_directive_t;
+             end;
+             { Is the document indicator implicit? }
+             implicit : Integer;
+           end;
+          );
+      { The document end parameters (for @c YAML_DOCUMENT_END_EVENT). }
+      3 : (document_end : record
+             { Is the document end indicator implicit? }
+             implicit : Integer;
+           end;
+          );
+      { The alias parameters (for @c YAML_ALIAS_EVENT). }
+      4: (alias_param : record
+            { The anchor. }
+            anchor : pyaml_char_t;
+          end;
+         );
+      { The scalar parameters (for @c YAML_SCALAR_EVENT). }
+      5 : (scalar : record
+           { The anchor. }
+           anchor : pyaml_char_t;
+           { The tag. }
+           tag : pyaml_char_t;
+           { The scalar value. }
+           value : pyaml_char_t;
+           { The length of the scalar value. }
+           length : QWord;
+           { Is the tag optional for the plain style? }
+           plain_implicit : Integer;
+           { Is the tag optional for any non-plain style? }
+           quoted_implicit : Integer;
+           { The scalar style. }
+           style : yaml_scalar_style_t;
+           end;
+          );
+      { The sequence parameters (for @c YAML_SEQUENCE_START_EVENT). }
+      6 : (sequence_start : record
+           { The anchor. }
+           anchor : pyaml_char_t;
+           { The tag. }
+           tag : pyaml_char_t;
+           { Is the tag optional? }
+           implicit : Integer;
+           { The sequence style. }
+           style : yaml_sequence_style_t;
+           end;
+          );
+      { The mapping parameters (for @c YAML_MAPPING_START_EVENT). }
+      7 : (mapping_start : record
+           { The anchor. }
+           anchor : pyaml_char_t;
+           { The tag. }
+           tag : pyaml_char_t;
+           { Is the tag optional? }
+           implicit : Integer;
+           { The mapping style. }
+           style : yaml_mapping_style_t;
+           end;
+          );
+    end;
     start_mark : yaml_mark_t;        { The beginning of the event. }
     end_mark : yaml_mark_t;          { The end of the event. }
   end;
@@ -370,6 +366,7 @@ type
 
   { An element of a sequence node. }
   yaml_node_item_t = Integer;
+  pyaml_node_item_t = ^yaml_node_item_t;
 
   { An element of a mapping node. }
   yaml_node_pair_s = record
@@ -379,58 +376,54 @@ type
   pyaml_node_pair_t = ^yaml_node_pair_t;
   yaml_node_pair_t = yaml_node_pair_s;
 
-  pyaml_node_item_t = ^yaml_node_item_t;
-
-  _yaml_node_data_t = record
-    case Integer of
-    { The scalar parameters (for @c YAML_SCALAR_NODE). }
-    1 : (scalar : record
-           { The scalar value. }
-           value : pyaml_char_t;
-           { The length of the scalar value. }
-           length : QWord;
-           { The scalar style. }
-           style : yaml_scalar_style_t;
-         end;
-        );
-    { The sequence parameters (for @c YAML_SEQUENCE_NODE). }
-    2 : (sequence : record
-           { The stack of sequence items. }
-           items : record
-             { The beginning of the stack. }
-             start_item : pyaml_node_item_t;
-             { The end of the stack. }
-             end_item : pyaml_node_item_t;
-             { The top of the stack. }
-             top_item : pyaml_node_item_t;
-           end;
-           { The sequence style. }
-           style : yaml_sequence_style_t;
-         end;
-        );
-    { The mapping parameters (for @c YAML_MAPPING_NODE). }
-    3 : (mapping : record
-           { The stack of mapping pairs (key, value). }
-           pairs : record
-             { The beginning of the stack. }
-             start_stack : pyaml_node_pair_t;
-             { The end of the stack. }
-             end_stack : pyaml_node_pair_t;
-             { The top of the stack. }
-             top_stack : pyaml_node_pair_t;
-           end;
-           { The mapping style. }
-           style : yaml_mapping_style_t;
-         end;
-        );
-  end;
-
   { The node structure. }
   yaml_node_s = record
     node_type : yaml_node_type_t;    { The node type. }
     tag : pyaml_char_t;              { The node tag. }
     { The node data. }
-    data : _yaml_node_data_t;
+    data : record
+      case Integer of
+      { The scalar parameters (for @c YAML_SCALAR_NODE). }
+      1 : (scalar : record
+             { The scalar value. }
+             value : pyaml_char_t;
+             { The length of the scalar value. }
+             length : QWord;
+             { The scalar style. }
+             style : yaml_scalar_style_t;
+           end;
+          );
+      { The sequence parameters (for @c YAML_SEQUENCE_NODE). }
+      2 : (sequence : record
+             { The stack of sequence items. }
+             items : record
+               { The beginning of the stack. }
+               start_item : pyaml_node_item_t;
+               { The end of the stack. }
+               end_item : pyaml_node_item_t;
+               { The top of the stack. }
+               top_item : pyaml_node_item_t;
+             end;
+             { The sequence style. }
+             style : yaml_sequence_style_t;
+           end;
+          );
+      { The mapping parameters (for @c YAML_MAPPING_NODE). }
+      3 : (mapping : record
+             { The stack of mapping pairs (key, value). }
+             pairs : record
+               { The beginning of the stack. }
+               start_stack : pyaml_node_pair_t;
+               { The end of the stack. }
+               end_stack : pyaml_node_pair_t;
+               { The top of the stack. }
+               top_stack : pyaml_node_pair_t;
+             end;
+             { The mapping style. }
+             style : yaml_mapping_style_t;
+           end;
+          );
+    end;
     start_mark : yaml_mark_t;        { The beginning of the node. }
     end_mark : yaml_mark_t;          { The end of the node. }
   end;
@@ -560,21 +553,6 @@ type
 
    All members are internal.  Manage the structure using the @c yaml_parser_
    family of functions. }
-  yaml_parser_input_t = record
-    case input : Integer of
-    { String input data. }
-    1 : (string_data : record
-           start_string : PByte;     { The string start pointer. }
-           end_string : PByte;       { The string end pointer. }
-           current : PByte;          { The string current position. }
-         end;
-        );
-    { File input data. }
-    2 : (
-        file_pointer : Pointer;
-        );
-  end;
-
   yaml_parser_s = record
     error : yaml_error_type_t;       { Error type. }
     problem : PChar;                 { Error description. }
@@ -587,7 +565,20 @@ type
     read_handler_data : Pointer;     { A pointer for passing to the read
                                        handler. }
     { Standard (string or file) input data. }
-    input : yaml_parser_input_t;
+    input : record
+      case Integer of
+      { String input data. }
+      1 : (string_data : record
+             start_string : PByte;     { The string start pointer. }
+             end_string : PByte;       { The string end pointer. }
+             current : PByte;          { The string current position. }
+           end;
+          );
+      { File input data. }
+      2 : (
+          file_pointer : Pointer;
+          );
+    end;
     eof : Integer;                   { EOF flag }
     { The working buffer. }
     buffer : record
@@ -738,22 +729,6 @@ type
 
    All members are internal.  Manage the structure using the @c yaml_emitter_
    family of functions. }
-
-  _yaml_emitter_output_t = record
-    case Integer of
-    { String output data. }
-    1 : (string_output : record
-           buffer : PChar;           { The buffer pointer. }
-           size : QWord;             { The buffer size. }
-           size_written : PQWord;    { The number of written bytes. }
-         end;
-        );
-    { File output data. }
-    2 : (
-          file_handle : Pointer;     { File output data. }
-        );
-  end;
-
   _pyaml_emitter_anchors_t = ^_yaml_emitter_anchors_t;
   _yaml_emitter_anchors_t = record
     references : Integer;          { The number of references. }
@@ -768,7 +743,20 @@ type
     write_handler_data : Pointer;    { A pointer for passing to the white
                                        handler. }
     { Standard (string or file) output data. }
-    output : _yaml_emitter_output_t;
+    output : record
+      case Integer of
+      { String output data. }
+      1 : (string_output : record
+             buffer : PChar;           { The buffer pointer. }
+             size : QWord;             { The buffer size. }
+             size_written : PQWord;    { The number of written bytes. }
+           end;
+          );
+      { File output data. }
+      2 : (
+            file_handle : Pointer;     { File output data. }
+          );
+    end;
 
     { The working buffer. }
     buffer : record
