@@ -28,6 +28,7 @@ var
   Result : Integer;
 begin
   yaml_emitter_initialize(@emitter);
+
   Result := yaml_stream_start_event_initialize(@event, YAML_UTF8_ENCODING);
   AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
     emitter.problem]), Result <> 0);
@@ -95,6 +96,54 @@ begin
   AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
     emitter.problem]), Result <> 0);
   {--- end first item ---}
+
+  {--- second item ---}
+  Result := yaml_mapping_start_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_MAP_TAG)), 1, YAML_ANY_MAPPING_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  Result := yaml_scalar_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_STR_TAG)), pyaml_char_t(PChar('name')),
+    Length('name'), 1, 0, YAML_PLAIN_SCALAR_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  Result := yaml_scalar_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_STR_TAG)), pyaml_char_t(PChar('orange')),
+    Length('apple'), 1, 0, YAML_PLAIN_SCALAR_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  Result := yaml_scalar_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_STR_TAG)), pyaml_char_t(PChar('color')),
+    Length('color'), 1, 0, YAML_PLAIN_SCALAR_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  Result := yaml_scalar_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_STR_TAG)), pyaml_char_t(PChar('orange')),
+    Length('red'), 1, 0, YAML_PLAIN_SCALAR_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  Result := yaml_scalar_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_STR_TAG)), pyaml_char_t(PChar('count')),
+    Length('count'), 1, 0, YAML_PLAIN_SCALAR_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  buffer := Format('%d', [3]);
+  Result := yaml_scalar_event_initialize(@event, nil,
+    pyaml_char_t(PChar(YAML_INT_TAG)), pyaml_char_t(@buffer[0]),
+    Length(buffer), 1, 0, YAML_PLAIN_SCALAR_STYLE);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+
+  Result := yaml_mapping_end_event_initialize(@event);
+  AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
+    emitter.problem]), Result <> 0);
+  {--- end second item ---}
 
   Result := yaml_sequence_end_event_initialize(@event);
   AssertTrue(Format('Failed to emit event %d: %s', [event.event_type,
