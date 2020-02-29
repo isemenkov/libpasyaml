@@ -5,7 +5,7 @@ unit pasyamltestcase;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry, libpasyaml;
+  Classes, SysUtils, fpcunit, testregistry, libpasyaml, pasyaml;
 
 type
 
@@ -16,7 +16,25 @@ type
     procedure TestCreate;
   end;
 
+  { TYamlTestCase }
+
+  TYamlTestCase = class(TTestCase)
+  published
+    procedure TestCreate;
+  end;
+
 implementation
+
+{ TYamlTestCase }
+
+procedure TYamlTestCase.TestCreate;
+var
+  Config : TYamlConfig;
+begin
+  Config := TYamlConfig.Create(ENCODING_UTF8);
+
+  FreeAndNil(Config);
+end;
 
 { TLibYamlTestCase }
 
@@ -163,7 +181,7 @@ begin
 end;
 
 initialization
-
   RegisterTest(TLibYamlTestCase);
+  RegisterTest(TYamlTestCase);
 end.
 

@@ -37,27 +37,83 @@ uses
   Classes, SysUtils, libpasyaml;
 
 type
-
   { TYamlConfig }
-
+  { Configuration file }
   TYamlConfig = class
+  public
+    type
+      { Document encoding }
+      TEncoding = (
+        { Let the parser choose the encoding. }
+        ENCODING_DEFAULT = Longint(YAML_ANY_ENCODING),
+        { The default UTF-8 encoding. }
+        ENCODING_UTF8    = Longint(YAML_UTF8_ENCODING),
+        { The UTF-16-LE encoding with BOM. }
+        ENCODING_UTF16LE = Longint(YAML_UTF16LE_ENCODING),
+        { The UTF-16-BE encoding with BOM. }
+        ENCODING_UTF16BE = Longint(YAML_UTF16BE_ENCODING)
+      );
+
+      { Yaml mapping style }
+      TMapStyle = (
+        { Let the emitter choose the style. }
+        STYLE_ANY   = Longint(YAML_ANY_MAPPING_STYLE),
+        { The block mapping style. }
+        STYLE_BLOCK = Longint(YAML_BLOCK_MAPPING_STYLE),
+        { The flow mapping style. }
+        STYLE_FLOW  = Longint(YAML_FLOW_MAPPING_STYLE)
+      );
+
+      { Yaml sequence style }
+      TSequenceStyle = (
+        { Let the emitter choose the style. }
+        STYLE_ANY = Longint(YAML_ANY_SEQUENCE_STYLE),
+        { The block sequence style. }
+        STYLE_BLOCK = Longint(YAML_BLOCK_SEQUENCE_STYLE),
+        { The flow sequence style. }
+        STYLE_FLOW = Longint(YAML_FLOW_SEQUENCE_STYLE)
+      );
+
+      { TOptionWriter }
+      { Writer for configuration option }
+      TOptionWriter = class
+
+      end;
+
+      { TOptionReader }
+      { Reader for configuration option }
+      TOptionReader = class
+
+      end;
   private
     FEmitter : yaml_emitter_t;
     FEvent : yaml_event_t;
+  private
+    function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFDEF DEBUG}
+      inline;{$ENDIF}
+    function _CreateSequence (Style : TSequenceStyle) : TOptionWriter;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
   public
-    constructor Create;
+    constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
-  end;
 
+    { Create new map section }
+    property CreateMap [Style : TMapStyle] : TOptionWriter read
+      _CreateMap;
+
+    { Create new sequence section }
+    property CreateSequence [Style : TSequenceStyle] : TOptionWriter read
+      _CreateSequence;
+  end;
 
 implementation
 
 { TYamlConfig }
 
-constructor TYamlConfig.Create;
+constructor TYamlConfig.Create (Encoding : TEncoding);
 begin
   yaml_emitter_initialize(@FEmitter);
-  FEmitter := yaml_stream_start_event_initialize(@FEvent, YAML_UTF8_ENCODING);
+  yaml_stream_start_event_initialize(@FEvent, yaml_encoding_t(Encoding));
   yaml_document_start_event_initialize(@FEvent, nil, nil, nil, 0);
 end;
 
