@@ -54,7 +54,7 @@ type
         ENCODING_UTF16BE = Longint(YAML_UTF16BE_ENCODING)
       );
 
-      { Yaml mapping style }
+      { Yaml mapping style
       TMapStyle = (
         { Let the emitter choose the style. }
         STYLE_ANY   = Longint(YAML_ANY_MAPPING_STYLE),
@@ -62,9 +62,9 @@ type
         STYLE_BLOCK = Longint(YAML_BLOCK_MAPPING_STYLE),
         { The flow mapping style. }
         STYLE_FLOW  = Longint(YAML_FLOW_MAPPING_STYLE)
-      );
+      ); }
 
-      { Yaml sequence style }
+      { Yaml sequence style
       TSequenceStyle = (
         { Let the emitter choose the style. }
         STYLE_ANY = Longint(YAML_ANY_SEQUENCE_STYLE),
@@ -72,7 +72,7 @@ type
         STYLE_BLOCK = Longint(YAML_BLOCK_SEQUENCE_STYLE),
         { The flow sequence style. }
         STYLE_FLOW = Longint(YAML_FLOW_SEQUENCE_STYLE)
-      );
+      ); }
 
       { TOptionWriter }
       { Writer for configuration option }
@@ -89,21 +89,21 @@ type
     FEmitter : yaml_emitter_t;
     FEvent : yaml_event_t;
   private
-    function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFDEF DEBUG}
+    {function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
       inline;{$ENDIF}
     function _CreateSequence (Style : TSequenceStyle) : TOptionWriter;
-      {$IFNDEF DEBUG}inline;{$ENDIF}
+      {$IFNDEF DEBUG}inline;{$ENDIF} }
   public
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
 
     { Create new map section }
-    property CreateMap [Style : TMapStyle] : TOptionWriter read
+    {property CreateMap [Style : TMapStyle] : TOptionWriter read
       _CreateMap;
 
     { Create new sequence section }
     property CreateSequence [Style : TSequenceStyle] : TOptionWriter read
-      _CreateSequence;
+      _CreateSequence; }
   end;
 
 implementation

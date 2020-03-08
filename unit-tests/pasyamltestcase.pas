@@ -14,6 +14,7 @@ type
   TLibYamlTestCase = class(TTestCase)
   published
     procedure TestCreate;
+    procedure TestVersion;
   end;
 
   { TYamlTestCase }
@@ -178,6 +179,20 @@ begin
     emitter.problem]), Result <> 0);
 
   yaml_emitter_delete(@emitter);
+end;
+
+procedure TLibYamlTestCase.TestVersion;
+var
+  major, minor, patch : Integer;
+  Version : String;
+begin
+  major := -1;
+  minor := -1;
+  patch := -1;
+
+  yaml_get_version(@major, @minor, @patch);
+  Version := Format('%d.%d.%d', [major, minor, patch]);
+  AssertTrue('YAML version is not correct', Version = yaml_get_version_string);
 end;
 
 initialization
