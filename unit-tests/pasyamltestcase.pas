@@ -30,9 +30,9 @@ implementation
 
 procedure TYamlTestCase.TestCreate;
 var
-  Config : TYamlConfig;
+  Config : TYamlFile;
 begin
-  Config := TYamlConfig.Create(ENCODING_UTF8);
+  Config := TYamlFile.Create(ENCODING_UTF8);
 
   FreeAndNil(Config);
 end;
