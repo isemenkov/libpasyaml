@@ -77,7 +77,11 @@ type
       { TOptionWriter }
       { Writer for configuration option }
       TOptionWriter = class
-
+      private
+        FEvent : yaml_event_t;
+      public
+        constructor Create (Event : yaml_event_t; Style: TMapStyle);
+        destructor Destroy; override;
       end;
 
       { TOptionReader }
@@ -88,6 +92,7 @@ type
   private
     FEmitter : yaml_emitter_t;
     FEvent : yaml_event_t;
+    FLastElement : TOptionWriter;
   private
     function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
       inline;{$ENDIF}
@@ -108,16 +113,36 @@ type
 
 implementation
 
+{ TYamlFile.TOptionWriter }
+
+constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t; Style:
+  TMapStyle);
+begin
+  FEvent := Event;
+  yaml_mapping_start_event_initialize(@FEvent, nil,
+    pyaml_char_t(PChar(YAML_MAP_TAG)), 1, yaml_mapping_style_e(Longint(Style)));
+end;
+
+destructor TYamlFile.TOptionWriter.Destroy;
+begin
+  yaml_mapping_end_event_initialize(@FEvent);
+  inherited Destroy;
+end;
+
 { TYamlConfig }
 
 function TYamlFile._CreateMap(Style: TMapStyle): TOptionWriter;
 begin
-  Result := TOptionWriter.Create;
+  FreeAndNil(FLastElement);
+  FLastElement := TOptionWriter.Create(FEvent, Style);
+  Result := FLastElement;
 end;
 
 function TYamlFile._CreateSequence(Style: TSequenceStyle): TOptionWriter;
 begin
-  Result := TOptionWriter.Create;
+  FreeAndNil(FLastElement);
+  FLastElement := TOptionWriter.Create(FEvent);
+  Result := FLastElement;
 end;
 
 constructor TYamlFile.Create (Encoding : TEncoding);
@@ -125,10 +150,12 @@ begin
   yaml_emitter_initialize(@FEmitter);
   yaml_stream_start_event_initialize(@FEvent, yaml_encoding_t(Encoding));
   yaml_document_start_event_initialize(@FEvent, nil, nil, nil, 0);
+  FLastElement := nil;
 end;
 
 destructor TYamlFile.Destroy;
 begin
+  FreeAndNil(FLastElement);
   yaml_stream_end_event_initialize(@FEvent);
   yaml_emitter_delete(@FEmitter);
   inherited Destroy;
