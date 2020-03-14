@@ -77,10 +77,26 @@ type
       { TOptionWriter }
       { Writer for configuration option }
       TOptionWriter = class
-      private
+      protected
         FEvent : yaml_event_t;
       public
-        constructor Create (Event : yaml_event_t; Style: TMapStyle);
+        constructor Create (Event : yaml_event_t);
+        destructor Destroy; override;
+      end;
+
+      { TMapWriter }
+      { Map option writer }
+      TMapWriter = class (TOptionWriter)
+      public
+        constructor Create (Event : yaml_event_t; Style : TMapStyle);
+        destructor Destroy; override;
+      end;
+
+      { TSequenceWriter }
+      { Sequence option writer }
+      TSequenceWriter = class (TOptionWriter)
+      public
+        constructor Create (Event : yaml_event_t; Style : TSequenceStyle);
         destructor Destroy; override;
       end;
 
@@ -113,19 +129,49 @@ type
 
 implementation
 
+{ TYamlFile.TSequenceWriter }
+
+constructor TYamlFile.TSequenceWriter.Create(Event: yaml_event_t;
+  Style: TSequenceStyle);
+begin
+  inherited Create(Event);
+  yaml_mapping_start_event_initialize(@FEvent, nil,
+    pyaml_char_t(PChar(YAML_SEQ_TAG)), 1,
+    yaml_sequence_style_e(Longint(Style)));
+end;
+
+destructor TYamlFile.TSequenceWriter.Destroy;
+begin
+  yaml_mapping_end_event_initialize(@FEvent);
+  inherited Destroy;
+end;
+
+{ TYamlFile.TMapWriter }
+
+constructor TYamlFile.TMapWriter.Create(Event: yaml_event_t; Style: TMapStyle);
+begin
+  inherited Create(Event);
+  yaml_mapping_start_event_initialize(@FEvent, nil,
+    pyaml_char_t(PChar(YAML_MAP_TAG)), 1,
+    yaml_mapping_style_e(Longint(Style)));
+end;
+
+destructor TYamlFile.TMapWriter.Destroy;
+begin
+  yaml_mapping_end_event_initialize(@FEvent);
+  inherited Destroy;
+end;
+
 { TYamlFile.TOptionWriter }
 
 constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t; Style:
   TMapStyle);
 begin
   FEvent := Event;
-  yaml_mapping_start_event_initialize(@FEvent, nil,
-    pyaml_char_t(PChar(YAML_MAP_TAG)), 1, yaml_mapping_style_e(Longint(Style)));
 end;
 
 destructor TYamlFile.TOptionWriter.Destroy;
 begin
-  yaml_mapping_end_event_initialize(@FEvent);
   inherited Destroy;
 end;
 
@@ -134,14 +180,14 @@ end;
 function TYamlFile._CreateMap(Style: TMapStyle): TOptionWriter;
 begin
   FreeAndNil(FLastElement);
-  FLastElement := TOptionWriter.Create(FEvent, Style);
+  FLastElement := TMapWriter.Create(FEvent, Style);
   Result := FLastElement;
 end;
 
 function TYamlFile._CreateSequence(Style: TSequenceStyle): TOptionWriter;
 begin
   FreeAndNil(FLastElement);
-  FLastElement := TOptionWriter.Create(FEvent);
+  FLastElement := TSequenceWriter.Create(FEvent, Style);
   Result := FLastElement;
 end;
 
