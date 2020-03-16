@@ -135,7 +135,7 @@ constructor TYamlFile.TSequenceWriter.Create(Event: yaml_event_t;
   Style: TSequenceStyle);
 begin
   inherited Create(Event);
-  yaml_mapping_start_event_initialize(@FEvent, nil,
+  yaml_sequence_start_event_initialize(@FEvent, nil,
     pyaml_char_t(PChar(YAML_SEQ_TAG)), 1,
     yaml_sequence_style_e(Longint(Style)));
 end;
@@ -164,8 +164,7 @@ end;
 
 { TYamlFile.TOptionWriter }
 
-constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t; Style:
-  TMapStyle);
+constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t);
 begin
   FEvent := Event;
 end;
