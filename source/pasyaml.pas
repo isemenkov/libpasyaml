@@ -34,14 +34,42 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml;
+  Classes, SysUtils, libpasyaml, fgl;
 
 type
+  { Method result generic value }
+  generic TResult<ResultValue, ErrorValue> = class
+  private
+    FResult : ResultValue;
+    FError : ErrorValue;
+  public
+    constructor Create (Res : ResultValue; Err : ErrorValue);
+    destructor Destroy;
+
+    function Ok : Boolean; {$IFNDEF DEBUG}inline;{$ENDIF}
+
+    property Result : ResultValue read FResult;
+    property Error : ErrorValue read FError;
+  end;
+
+  TErrorStack = class
+  private
+
+  end;
+
   { TYamlConfig }
   { Configuration YAML file }
   TYamlFile = class
   public
     type
+      { Errors list }
+      TErrors = (
+        ERROR_EMITTER_INIT                                             = -1,
+
+      );
+
+      TNilResult = specialize TResult<nil, TErrors>;
+
       { Document encoding }
       TEncoding = (
         { Let the parser choose the encoding. }
