@@ -40,16 +40,14 @@ const
   ERROR_OK                                                            =  1;
 
 type
-  { TYamlConfig }
-  { Configuration YAML file }
-
   { TYamlFile }
-
+  { Configuration YAML file }
   TYamlFile = class
   public
     type
       { Errors list }
       TErrors = (
+        ERROR_NONE                                                    = 0,
         ERROR_EMITTER_INIT                                            = -1,
         ERROR_EMITTER_FINAL                                           = -2{%H-},
         ERROR_STREAM_INIT                                             = -3,
@@ -161,7 +159,7 @@ type
     destructor Destroy; override;
 
     function HasErrors : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
-
+    function LastError : TErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
 
     { Create new map section }
     property CreateMap [Style : TMapStyle] : TOptionWriter read
@@ -319,6 +317,17 @@ end;
 function TYamlFile.HasErrors: Boolean;
 begin
   Result := FErrors.Count > 0;
+end;
+
+function TYamlFile.LastError: TErrors;
+begin
+  if HasErrors then
+  begin
+    Result := FErrors.Pop;
+  end else
+  begin
+    Result := ERROR_NONE;
+  end;
 end;
 
 end.
