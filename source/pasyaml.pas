@@ -73,9 +73,17 @@ type
         constructor Create;
         destructor Destroy; override;
 
+        { Add error into stack }
         procedure Push (Err : TErrors);{$IFNDEF DEBUG}inline{$ENDIF}
+
+        { Get last error }
         function Pop : TErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
+
+        { Errors count }
         function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
+
+        { Clear all erorrs }
+        procedure Clear;{$IFNDEF DEBUG}inline;{$ENDIF}
       end;
 
       { Document encoding }
@@ -158,8 +166,14 @@ type
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
 
+    { Return true is errors stack is not empty }
     function HasErrors : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
+
+    { Return last error or ERROR_NONE if errors stack is empty }
     function LastError : TErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
+
+    { Delete all errors }
+    procedure ClearErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
 
     { Create new map section }
     property CreateMap [Style : TMapStyle] : TOptionWriter read
@@ -202,6 +216,11 @@ end;
 function TYamlFile.TErrorStack.Count: Cardinal;
 begin
   Result := FErrors.Count;
+end;
+
+procedure TYamlFile.TErrorStack.Clear;
+begin
+  FErrors.Clear;
 end;
 
 { TYamlFile.TSequenceWriter }
@@ -328,6 +347,11 @@ begin
   begin
     Result := ERROR_NONE;
   end;
+end;
+
+procedure TYamlFile.ClearErrors;
+begin
+  FErrors.Clear;
 end;
 
 end.
