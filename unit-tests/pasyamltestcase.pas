@@ -15,6 +15,7 @@ type
   published
     procedure TestCreate;
     procedure TestVersion;
+    procedure TestParser;
   end;
 
   { TYamlTestCase }
@@ -193,6 +194,50 @@ begin
   yaml_get_version(@major, @minor, @patch);
   Version := Format('%d.%d.%d', [major, minor, patch]);
   AssertTrue('YAML version is not correct', Version = yaml_get_version_string);
+end;
+
+procedure TLibYamlTestCase.TestParser;
+var
+  parser : yaml_parser_t;
+  input : string;
+  token : yaml_token_t;
+begin
+  input := 'title   : Finex 2011'                                 + sLineBreak +
+           'img_url : /finex/html/img/'                           + sLineBreak +
+           'css_url : /finex/html/style/'                         + sLineBreak +
+           'js_url  : /finex/html/js/'                            + sLineBreak +
+           ''                                                     + sLineBreak +
+           'template_dir: html/templ/'                            + sLineBreak +
+           ''                                                     + sLineBreak +
+           'default_act : idx    # used for invalid/missing act=' + sLineBreak +
+           ''                                                     + sLineBreak +
+           'pages:'                                               + sLineBreak +
+           '  - act   : idx'                                      + sLineBreak +
+           '    title : Welcome'                                  + sLineBreak +
+           '    html  : public/welcome.phtml'                     + sLineBreak +
+           '  - act   : reg'                                      + sLineBreak +
+           '    title : Register'                                 + sLineBreak +
+           '    html  : public/register.phtml'                    + sLineBreak +
+           '  - act   : log'                                      + sLineBreak +
+           '    title : Log in'                                   + sLineBreak +
+           '    html  : public/login.phtml'                       + sLineBreak +
+           '  - act   : out'                                      + sLineBreak +
+           '    title : Log out'                                  + sLineBreak +
+           '    html  : public/logout.phtml';
+
+  if yaml_parser_initialize(@parser) <> 1 then
+    Fail('Failed to initialize parser');
+  yaml_parser_set_input_string(@parser, PByte(PChar(input)), Length(input));
+
+  repeat
+    if yaml_parser_scan(@parser, @token) <> 1 then
+      Fail('Failed to parse token');
+
+
+  until (token.token_type = YAML_STREAM_END_TOKEN);
+  yaml_token_delete(@token);
+
+  yaml_parser_delete(@parser);
 end;
 
 initialization
