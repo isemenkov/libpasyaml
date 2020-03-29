@@ -34,7 +34,7 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml, fgl;
+  Classes, SysUtils, libpasyaml;
 
 const
   ERROR_OK                                                            =  1;
@@ -45,10 +45,29 @@ type
   TYamlFile = class
   public
     type
+      { Result structure which stored value and error type if exists like GO
+        lang }
+      generic TResult<VALUE_TYPE, ERROR_TYPE> = class
+      protected
+        FValue : VALUE_TYPE;
+        FError : ERROR_TYPE;
+        FOk : Boolean;
+
+        function _Ok : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
+      public
+        constructor Create (AValue : VALUE_TYPE; AError : ERROR_TYPE;
+          AOk : Boolean);
+        destructor Destroy; override;
+
+        property Ok : Boolean read _Ok;
+        property Value : VALUE_TYPE read FValue;
+        property Error : ERROR_TYPE read FError;
+      end;
+
       { Errors list }
       TErrors = (
         ERROR_NONE                                                    = 0,
-        ERROR_EMITTER_INIT                                            = -1,
+        ERROR_EMITTER_INIT                                            = -1{%H-},
         ERROR_EMITTER_FINAL                                           = -2{%H-},
         ERROR_STREAM_INIT                                             = -3,
         ERROR_STREAM_FINAL                                            = -4,
@@ -60,30 +79,11 @@ type
         ERROR_SEQUENCE_FINAL                                          = -10
       );
 
-      { Errors list stack }
-      { TErrorStack }
-      PErrorStack = ^TErrorStack;
-      TErrorStack = class
+      TVoidResult = class(specialize TResult<Pointer, TErrors>)
       private
-        type
-          TErrorsList = specialize TFPGList<TErrors>;
-      private
-        FErrors : TErrorsList;
+        property Value;
       public
-        constructor Create;
-        destructor Destroy; override;
-
-        { Add error into stack }
-        procedure Push (Err : TErrors);{$IFNDEF DEBUG}inline{$ENDIF}
-
-        { Get last error }
-        function Pop : TErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
-
-        { Errors count }
-        function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
-
-        { Clear all erorrs }
-        procedure Clear;{$IFNDEF DEBUG}inline;{$ENDIF}
+        constructor Create(AError : TErrors; AOk : Boolean);
       end;
 
       { Document encoding }
@@ -123,9 +123,8 @@ type
       TOptionWriter = class
       protected
         FEvent : yaml_event_t;
-        FErrors : PErrorStack;
       public
-        constructor Create (Event : yaml_event_t; Err : PErrorStack);
+        constructor Create (Event : yaml_event_t);
         destructor Destroy; override;
       end;
 
@@ -133,8 +132,7 @@ type
       { Map option writer }
       TMapWriter = class (TOptionWriter)
       public
-        constructor Create (Event : yaml_event_t; Style : TMapStyle;
-          Err : PErrorStack);
+        constructor Create (Event : yaml_event_t; Style : TMapStyle);
         destructor Destroy; override;
       end;
 
@@ -142,8 +140,7 @@ type
       { Sequence option writer }
       TSequenceWriter = class (TOptionWriter)
       public
-        constructor Create (Event : yaml_event_t; Style : TSequenceStyle;
-          Err : PErrorStack);
+        constructor Create (Event : yaml_event_t; Style : TSequenceStyle);
         destructor Destroy; override;
       end;
 
@@ -156,7 +153,6 @@ type
     FEmitter : yaml_emitter_t;
     FEvent : yaml_event_t;
     FLastElement : TOptionWriter;
-    FErrors : TErrorStack;
   private
     function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
       inline;{$ENDIF}
@@ -165,15 +161,6 @@ type
   public
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
-
-    { Return true is errors stack is not empty }
-    function HasErrors : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
-
-    { Return last error or ERROR_NONE if errors stack is empty }
-    function LastError : TErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
-
-    { Delete all errors }
-    procedure ClearErrors;{$IFNDEF DEBUG}inline;{$ENDIF}
 
     { Create new map section }
     property CreateMap [Style : TMapStyle] : TOptionWriter read
@@ -186,54 +173,44 @@ type
 
 implementation
 
-{ TYamlFile.TErrorStack }
+{ TYamlFile.TResult }
 
-constructor TYamlFile.TErrorStack.Create;
+constructor TYamlFile.TResult.Create (AValue : VALUE_TYPE; AError : ERROR_TYPE;
+  AOk : Boolean);
 begin
-  FErrors := TErrorsList.Create;
+  FValue := AValue;
+  FError := AError;
+  FOk := AOk;
 end;
 
-destructor TYamlFile.TErrorStack.Destroy;
+destructor TYamlFile.TResult.Destroy;
 begin
-  FreeAndNil(FErrors);
   inherited Destroy;
 end;
 
-procedure TYamlFile.TErrorStack.Push(Err: TErrors);
+function TYamlFile.TResult._Ok : Boolean;
 begin
-  FErrors.Add(Err);
+  Result := FOk;
 end;
 
-function TYamlFile.TErrorStack.Pop: TErrors;
-begin
-  if Count > 0 then
-  begin
-    Result := FErrors.First;
-    FErrors.Delete(0);
-  end;
-end;
+{ TYamlFile.TVoidResult }
 
-function TYamlFile.TErrorStack.Count: Cardinal;
+constructor TYamlFile.TVoidResult.Create (AError : TErrors; AOk : Boolean);
 begin
-  Result := FErrors.Count;
-end;
-
-procedure TYamlFile.TErrorStack.Clear;
-begin
-  FErrors.Clear;
+  inherited Create (nil, AError, AOk);
 end;
 
 { TYamlFile.TSequenceWriter }
 
 constructor TYamlFile.TSequenceWriter.Create(Event: yaml_event_t;
-  Style: TSequenceStyle; Err : PErrorStack);
+  Style: TSequenceStyle);
 begin
-  inherited Create(Event, Err);
+  inherited Create(Event);
   if yaml_sequence_start_event_initialize(@FEvent, nil,
        pyaml_char_t(PChar(YAML_SEQ_TAG)), 1,
        yaml_sequence_style_e(Longint(Style))) <> ERROR_OK then
   begin
-    FErrors^.Push(ERROR_SEQUENCE_INIT);
+
   end;
 end;
 
@@ -241,7 +218,7 @@ destructor TYamlFile.TSequenceWriter.Destroy;
 begin
   if yaml_mapping_end_event_initialize(@FEvent) <> ERROR_OK then
   begin
-    FErrors^.Push(ERROR_SEQUENCE_FINAL);
+
   end;
 
   inherited Destroy;
@@ -249,15 +226,14 @@ end;
 
 { TYamlFile.TMapWriter }
 
-constructor TYamlFile.TMapWriter.Create(Event: yaml_event_t; Style: TMapStyle;
-  Err : PErrorStack);
+constructor TYamlFile.TMapWriter.Create(Event: yaml_event_t; Style: TMapStyle);
 begin
-  inherited Create(Event, Err);
+  inherited Create(Event);
   if yaml_mapping_start_event_initialize(@FEvent, nil,
        pyaml_char_t(PChar(YAML_MAP_TAG)), 1,
        yaml_mapping_style_e(Longint(Style))) <> ERROR_OK then
   begin
-    FErrors^.Push(ERROR_MAP_INIT);
+
   end;
 end;
 
@@ -265,7 +241,7 @@ destructor TYamlFile.TMapWriter.Destroy;
 begin
   if yaml_mapping_end_event_initialize(@FEvent) <> ERROR_OK then
   begin
-    FErrors^.Push(ERROR_MAP_FINAL);
+
   end;
 
   inherited Destroy;
@@ -273,11 +249,9 @@ end;
 
 { TYamlFile.TOptionWriter }
 
-constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t;
-  Err : PErrorStack);
+constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t);
 begin
   FEvent := Event;
-  FErrors := Err;
 end;
 
 destructor TYamlFile.TOptionWriter.Destroy;
@@ -290,35 +264,34 @@ end;
 function TYamlFile._CreateMap(Style: TMapStyle): TOptionWriter;
 begin
   FreeAndNil(FLastElement);
-  FLastElement := TMapWriter.Create(FEvent, Style, @FErrors);
+  FLastElement := TMapWriter.Create(FEvent, Style);
   Result := FLastElement;
 end;
 
 function TYamlFile._CreateSequence(Style: TSequenceStyle): TOptionWriter;
 begin
   FreeAndNil(FLastElement);
-  FLastElement := TSequenceWriter.Create(FEvent, Style, @FErrors);
+  FLastElement := TSequenceWriter.Create(FEvent, Style);
   Result := FLastElement;
 end;
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
-  FErrors := TErrorStack.Create;
   if yaml_emitter_initialize(@FEmitter) <> ERROR_OK then
   begin
-    FErrors.Push(ERROR_EMITTER_INIT);
+
   end;
 
   if yaml_stream_start_event_initialize(@FEvent,
     yaml_encoding_t(Encoding)) <> ERROR_OK then
   begin
-    FErrors.Push(ERROR_STREAM_INIT);
+
   end;
 
   if yaml_document_start_event_initialize(@FEvent, nil, nil, nil, 0) <>
     ERROR_OK then
   begin
-    FErrors.Push(ERROR_DOCUMENT_INIT);
+
   end;
 
   FLastElement := nil;
@@ -329,29 +302,7 @@ begin
   FreeAndNil(FLastElement);
   yaml_stream_end_event_initialize(@FEvent);
   yaml_emitter_delete(@FEmitter);
-  FreeAndNil(FErrors);
   inherited Destroy;
-end;
-
-function TYamlFile.HasErrors: Boolean;
-begin
-  Result := FErrors.Count > 0;
-end;
-
-function TYamlFile.LastError: TErrors;
-begin
-  if HasErrors then
-  begin
-    Result := FErrors.Pop;
-  end else
-  begin
-    Result := ERROR_NONE;
-  end;
-end;
-
-procedure TYamlFile.ClearErrors;
-begin
-  FErrors.Clear;
 end;
 
 end.
