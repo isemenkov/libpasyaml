@@ -66,24 +66,24 @@ type
 
       { Errors list }
       TErrors = (
-        ERROR_NONE                                                    = 0,
-        ERROR_EMITTER_INIT                                            = -1{%H-},
-        ERROR_EMITTER_FINAL                                           = -2{%H-},
-        ERROR_STREAM_INIT                                             = -3,
-        ERROR_STREAM_FINAL                                            = -4,
-        ERROR_DOCUMENT_INIT                                           = -5,
-        ERROR_DOCUMENT_FINAL                                          = -6,
-        ERROR_MAP_INIT                                                = -7,
-        ERROR_MAP_FINAL                                               = -8,
-        ERROR_SEQUENCE_INIT                                           = -9,
-        ERROR_SEQUENCE_FINAL                                          = -10
+        ERROR_NONE                                                  = 0,
+        ERROR_EMITTER_INIT                                          = 1 shl 0,
+        ERROR_EMITTER_FINAL                                         = 1 shl 1,
+        ERROR_STREAM_INIT                                           = 1 shl 2,
+        ERROR_STREAM_FINAL                                          = 1 shl 3,
+        ERROR_DOCUMENT_INIT                                         = 1 shl 4,
+        ERROR_DOCUMENT_FINAL                                        = 1 shl 5,
+        ERROR_MAP_INIT                                              = 1 shl 6,
+        ERROR_MAP_FINAL                                             = 1 shl 7,
+        ERROR_SEQUENCE_INIT                                         = 1 shl 8,
+        ERROR_SEQUENCE_FINAL                                        = 1 shl 9
       );
 
-      TVoidResult = class(specialize TResult<Pointer, TErrors>)
+      TVoidResult = class(specialize TResult<Pointer, Integer>)
       private
         property Value;
       public
-        constructor Create(AError : TErrors; AOk : Boolean);
+        constructor Create(AError : Integer; AOk : Boolean);
       end;
 
       { Document encoding }
@@ -153,6 +153,7 @@ type
     FEmitter : yaml_emitter_t;
     FEvent : yaml_event_t;
     FLastElement : TOptionWriter;
+    FLastError : Integer;
   private
     function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
       inline;{$ENDIF}
@@ -195,7 +196,7 @@ end;
 
 { TYamlFile.TVoidResult }
 
-constructor TYamlFile.TVoidResult.Create (AError : TErrors; AOk : Boolean);
+constructor TYamlFile.TVoidResult.Create (AError : Integer; AOk : Boolean);
 begin
   inherited Create (nil, AError, AOk);
 end;
@@ -277,21 +278,23 @@ end;
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
+  FLastError := Longint(ERROR_NONE);
+
   if yaml_emitter_initialize(@FEmitter) <> ERROR_OK then
   begin
-
+    FLastError := Longint(ERROR_EMITTER_INIT);
   end;
 
   if yaml_stream_start_event_initialize(@FEvent,
     yaml_encoding_t(Encoding)) <> ERROR_OK then
   begin
-
+    FLastError := FLastError or Longint(ERROR_STREAM_INIT);
   end;
 
   if yaml_document_start_event_initialize(@FEvent, nil, nil, nil, 0) <>
     ERROR_OK then
   begin
-
+    FLastError := FLastError or Longint(ERROR_DOCUMENT_INIT);
   end;
 
   FLastElement := nil;

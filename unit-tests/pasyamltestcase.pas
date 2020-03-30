@@ -234,6 +234,9 @@ begin
       Fail('Failed to parse token');
 
 
+
+    if token.token_type <> YAML_STREAM_END_TOKEN then
+      yaml_token_delete(@token);
   until (token.token_type = YAML_STREAM_END_TOKEN);
   yaml_token_delete(@token);
 
