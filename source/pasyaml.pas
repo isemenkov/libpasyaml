@@ -8,6 +8,13 @@
 (*                                                          Ukraine           *)
 (******************************************************************************)
 (*                                                                            *)
+(* Module:          Unit 'pasyaml'                                            *)
+(* Functionality:                                                             *)
+(*                                                                            *)
+(*                                                                            *)
+(*                                                                            *)
+(******************************************************************************)
+(*                                                                            *)
 (* This source  is free software;  you can redistribute  it and/or modify  it *)
 (* under the terms of the GNU General Public License as published by the Free *)
 (* Software Foundation; either version 3 of the License.                      *)
@@ -36,34 +43,21 @@ interface
 uses
   Classes, SysUtils, libpasyaml;
 
-const
-  ERROR_OK                                                            =  1;
-
 type
   { TYamlFile }
   { Configuration YAML file }
   TYamlFile = class
   public
     type
-      { Result structure which stored value and error type if exists like GO
-        lang }
-      generic TResult<VALUE_TYPE, ERROR_TYPE> = class
-      protected
-        FValue : VALUE_TYPE;
-        FError : ERROR_TYPE;
-        FOk : Boolean;
+      { Forward declarations }
+      TOptionWriter = class;
+      TMapWriter = class;
+      TSequenceWriter = class;
+      TOptionReader = class;
 
-        function _Ok : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
-      public
-        constructor Create (AValue : VALUE_TYPE; AError : ERROR_TYPE;
-          AOk : Boolean);
-        destructor Destroy; override;
-
-        property Ok : Boolean read _Ok;
-        property Value : VALUE_TYPE read FValue;
-        property Error : ERROR_TYPE read FError;
-      end;
-
+      TVoidResult = class;
+  public
+    type
       { Errors list }
       TErrors = (
         ERROR_NONE                                                  = 0,
@@ -78,13 +72,6 @@ type
         ERROR_SEQUENCE_INIT                                         = 1 shl 8,
         ERROR_SEQUENCE_FINAL                                        = 1 shl 9
       );
-
-      TVoidResult = class(specialize TResult<Pointer, Integer>)
-      private
-        property Value;
-      public
-        constructor Create(AError : Integer; AOk : Boolean);
-      end;
 
       { Document encoding }
       TEncoding = (
@@ -117,6 +104,56 @@ type
         { The flow sequence style. }
         SEQUENCE_STYLE_FLOW = Longint(YAML_FLOW_SEQUENCE_STYLE)
       );
+  private
+    function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
+      inline;{$ENDIF}
+    function _CreateSequence (Style : TSequenceStyle) : TOptionWriter;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+  public
+    constructor Create (Encoding : TEncoding = ENCODING_UTF8);
+    destructor Destroy; override;
+
+    { Create new map section }
+    property CreateMap [Style : TMapStyle] : TOptionWriter read
+      _CreateMap;
+
+    { Create new sequence section }
+    property CreateSequence [Style : TSequenceStyle] : TOptionWriter read
+      _CreateSequence;
+  private
+    FEmitter : yaml_emitter_t;
+    FEvent : yaml_event_t;
+    FLastElement : TOptionWriter;
+    FLastError : Integer;
+  public
+    const
+      ERROR_OK                                                      =  1;
+    type
+      { Result structure which stored value and error type if exists like GO
+      lang }
+      generic TResult<VALUE_TYPE, ERROR_TYPE> = class
+      protected
+        FValue : VALUE_TYPE;
+        FError : ERROR_TYPE;
+        FOk : Boolean;
+
+        function _Ok : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
+      public
+        constructor Create (AValue : VALUE_TYPE; AError : ERROR_TYPE;
+          AOk : Boolean);
+        destructor Destroy; override;
+
+        property Ok : Boolean read _Ok;
+        property Value : VALUE_TYPE read FValue;
+        property Error : ERROR_TYPE read FError;
+      end;
+
+      TVoidResult = class(specialize TResult<Pointer, Integer>)
+      private
+        property Value;
+      public
+        constructor Create(AError : Integer; AOk : Boolean);
+      end;
 
       { TOptionWriter }
       { Writer for configuration option }
@@ -149,27 +186,6 @@ type
       TOptionReader = class
 
       end;
-  private
-    FEmitter : yaml_emitter_t;
-    FEvent : yaml_event_t;
-    FLastElement : TOptionWriter;
-    FLastError : Integer;
-  private
-    function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
-      inline;{$ENDIF}
-    function _CreateSequence (Style : TSequenceStyle) : TOptionWriter;
-      {$IFNDEF DEBUG}inline;{$ENDIF}
-  public
-    constructor Create (Encoding : TEncoding = ENCODING_UTF8);
-    destructor Destroy; override;
-
-    { Create new map section }
-    property CreateMap [Style : TMapStyle] : TOptionWriter read
-      _CreateMap;
-
-    { Create new sequence section }
-    property CreateSequence [Style : TSequenceStyle] : TOptionWriter read
-      _CreateSequence;
   end;
 
 implementation
