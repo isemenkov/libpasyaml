@@ -50,16 +50,16 @@ type
   public
     type
       { Forward declarations }
-      TOptionWriter = class;
-      TMapWriter = class;
+      TOptionWriter   = class;
+      TMapWriter      = class;
       TSequenceWriter = class;
-      TOptionReader = class;
-
-      TVoidResult = class;
+      TOptionReader   = class;
+      TVoidResult     = class;
   public
     type
-      { Errors list }
+      { Errors codes }
       TErrors = (
+        { All OK, no errors }
         ERROR_NONE                                                  = 0,
         ERROR_EMITTER_INIT                                          = 1 shl 0,
         ERROR_EMITTER_FINAL                                         = 1 shl 1,
@@ -105,8 +105,11 @@ type
         SEQUENCE_STYLE_FLOW = Longint(YAML_FLOW_SEQUENCE_STYLE)
       );
   private
+    { Create new map section }
     function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
       inline;{$ENDIF}
+
+    { Create new sequence section }
     function _CreateSequence (Style : TSequenceStyle) : TOptionWriter;
       {$IFNDEF DEBUG}inline;{$ENDIF}
   public
@@ -148,11 +151,12 @@ type
         property Error : ERROR_TYPE read FError;
       end;
 
+      { Void result, only error code is available }
       TVoidResult = class(specialize TResult<Pointer, Integer>)
-      private
-        property Value;
       public
         constructor Create(AError : Integer; AOk : Boolean);
+      private
+        property Value;
       end;
 
       { TOptionWriter }
