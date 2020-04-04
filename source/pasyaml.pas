@@ -41,7 +41,7 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml;
+  Classes, SysUtils, libpasyaml, fgl;
 
 type
   { TYamlFile }
@@ -50,27 +50,17 @@ type
   public
     type
       { Forward declarations }
-      TOptionWriter   = class;
-      TMapWriter      = class;
-      TSequenceWriter = class;
       TOptionReader   = class;
       TVoidResult     = class;
+      TItemValue      = class;
+      TItemsMap       = class(specialize TFPGMap<String, TOptionReader>);
   public
     type
       { Errors codes }
       TErrors = (
         { All OK, no errors }
-        ERROR_NONE                                                  = 0,
-        ERROR_EMITTER_INIT                                          = 1 shl 0,
-        ERROR_EMITTER_FINAL                                         = 1 shl 1,
-        ERROR_STREAM_INIT                                           = 1 shl 2,
-        ERROR_STREAM_FINAL                                          = 1 shl 3,
-        ERROR_DOCUMENT_INIT                                         = 1 shl 4,
-        ERROR_DOCUMENT_FINAL                                        = 1 shl 5,
-        ERROR_MAP_INIT                                              = 1 shl 6,
-        ERROR_MAP_FINAL                                             = 1 shl 7,
-        ERROR_SEQUENCE_INIT                                         = 1 shl 8,
-        ERROR_SEQUENCE_FINAL                                        = 1 shl 9
+        ERROR_NONE                                                  = 0
+
       );
 
       { Document encoding }
@@ -104,33 +94,27 @@ type
         { The flow sequence style. }
         SEQUENCE_STYLE_FLOW = Longint(YAML_FLOW_SEQUENCE_STYLE)
       );
-  private
-    { Create new map section }
-    function _CreateMap (Style : TMapStyle) : TOptionWriter;{$IFNDEF DEBUG}
-      inline;{$ENDIF}
-
-    { Create new sequence section }
-    function _CreateSequence (Style : TSequenceStyle) : TOptionWriter;
-      {$IFNDEF DEBUG}inline;{$ENDIF}
   public
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
 
-    { Create new map section }
-    property CreateMap [Style : TMapStyle] : TOptionWriter read
-      _CreateMap;
-
-    { Create new sequence section }
-    property CreateSequence [Style : TSequenceStyle] : TOptionWriter read
-      _CreateSequence;
+    { Parse configuration from string }
+    function Parse (ConfigString : String) : TVoidResult; {$IFNDEF DEBUG}inline;
+      {$ENDIF}
   private
-    FEmitter : yaml_emitter_t;
-    FEvent : yaml_event_t;
-    FLastElement : TOptionWriter;
-    FLastError : Integer;
-  public
+    FParser : yaml_parser_t;
+    FToken : yaml_token_t;
+    FItems : TItemsMap;
+  protected
     const
       ERROR_OK                                                      =  1;
+
+    type
+      TItemValueType = (
+        TYPE_SEQUENCE,
+        TYPE_SCALAR
+      );
+  public
     type
       { Result structure which stored value and error type if exists like GO
       lang }
@@ -159,36 +143,27 @@ type
         property Value;
       end;
 
-      { TOptionWriter }
-      { Writer for configuration option }
-      TOptionWriter = class
-      protected
-        FEvent : yaml_event_t;
+      TItemValue = class
       public
-        constructor Create (Event : yaml_event_t);
-        destructor Destroy; override;
+
+      private
+        type
+          TValue = record
+          ValueType : TItemValueType;
+          case Byte of
+            1 : (Sequence : TItemsMap);
+            2 : (Scalar : PChar);
+          end;
+
+      private
+        FValue : TValue;
       end;
 
-      { TMapWriter }
-      { Map option writer }
-      TMapWriter = class (TOptionWriter)
-      public
-        constructor Create (Event : yaml_event_t; Style : TMapStyle);
-        destructor Destroy; override;
-      end;
-
-      { TSequenceWriter }
-      { Sequence option writer }
-      TSequenceWriter = class (TOptionWriter)
-      public
-        constructor Create (Event : yaml_event_t; Style : TSequenceStyle);
-        destructor Destroy; override;
-      end;
-
-      { TOptionReader }
-      { Reader for configuration option }
       TOptionReader = class
+      public
 
+      private
+        FValue : TItemValue;
       end;
   end;
 
@@ -221,111 +196,52 @@ begin
   inherited Create (nil, AError, AOk);
 end;
 
-{ TYamlFile.TSequenceWriter }
-
-constructor TYamlFile.TSequenceWriter.Create(Event: yaml_event_t;
-  Style: TSequenceStyle);
-begin
-  inherited Create(Event);
-  if yaml_sequence_start_event_initialize(@FEvent, nil,
-       pyaml_char_t(PChar(YAML_SEQ_TAG)), 1,
-       yaml_sequence_style_e(Longint(Style))) <> ERROR_OK then
-  begin
-
-  end;
-end;
-
-destructor TYamlFile.TSequenceWriter.Destroy;
-begin
-  if yaml_mapping_end_event_initialize(@FEvent) <> ERROR_OK then
-  begin
-
-  end;
-
-  inherited Destroy;
-end;
-
-{ TYamlFile.TMapWriter }
-
-constructor TYamlFile.TMapWriter.Create(Event: yaml_event_t; Style: TMapStyle);
-begin
-  inherited Create(Event);
-  if yaml_mapping_start_event_initialize(@FEvent, nil,
-       pyaml_char_t(PChar(YAML_MAP_TAG)), 1,
-       yaml_mapping_style_e(Longint(Style))) <> ERROR_OK then
-  begin
-
-  end;
-end;
-
-destructor TYamlFile.TMapWriter.Destroy;
-begin
-  if yaml_mapping_end_event_initialize(@FEvent) <> ERROR_OK then
-  begin
-
-  end;
-
-  inherited Destroy;
-end;
-
-{ TYamlFile.TOptionWriter }
-
-constructor TYamlFile.TOptionWriter.Create(Event: yaml_event_t);
-begin
-  FEvent := Event;
-end;
-
-destructor TYamlFile.TOptionWriter.Destroy;
-begin
-  inherited Destroy;
-end;
-
 { TYamlConfig }
-
-function TYamlFile._CreateMap(Style: TMapStyle): TOptionWriter;
-begin
-  FreeAndNil(FLastElement);
-  FLastElement := TMapWriter.Create(FEvent, Style);
-  Result := FLastElement;
-end;
-
-function TYamlFile._CreateSequence(Style: TSequenceStyle): TOptionWriter;
-begin
-  FreeAndNil(FLastElement);
-  FLastElement := TSequenceWriter.Create(FEvent, Style);
-  Result := FLastElement;
-end;
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
-  FLastError := Longint(ERROR_NONE);
+  FItems := TItemsMap.Create;
 
-  if yaml_emitter_initialize(@FEmitter) <> ERROR_OK then
-  begin
-    FLastError := Longint(ERROR_EMITTER_INIT);
-  end;
-
-  if yaml_stream_start_event_initialize(@FEvent,
-    yaml_encoding_t(Encoding)) <> ERROR_OK then
-  begin
-    FLastError := FLastError or Longint(ERROR_STREAM_INIT);
-  end;
-
-  if yaml_document_start_event_initialize(@FEvent, nil, nil, nil, 0) <>
-    ERROR_OK then
-  begin
-    FLastError := FLastError or Longint(ERROR_DOCUMENT_INIT);
-  end;
-
-  FLastElement := nil;
+  if yaml_parser_initialize(@FParser) <> ERROR_OK then
+    ;
 end;
 
 destructor TYamlFile.Destroy;
 begin
-  FreeAndNil(FLastElement);
-  yaml_stream_end_event_initialize(@FEvent);
-  yaml_emitter_delete(@FEmitter);
+  yaml_parser_delete(@FParser);
+  FreeAndNil(FItems);
   inherited Destroy;
+end;
+
+function TYamlFile.Parse(ConfigString : String) : TVoidResult;
+begin
+  yaml_parser_set_input_string(@FParser, PByte(PChar(ConfigString)),
+    Length(ConfigString));
+
+  repeat
+
+    if yaml_parser_scan(@FParser, @FToken) <> ERROR_OK then
+      ;
+
+    case FToken.token_type of
+      YAML_STREAM_START_TOKEN : ;
+      YAML_STREAM_END_TOKEN : ;
+      YAML_KEY_TOKEN : ;
+      YAML_VALUE_TOKEN : ;
+      YAML_BLOCK_SEQUENCE_START_TOKEN : ;
+      YAML_BLOCK_ENTRY_TOKEN : ;
+      YAML_BLOCK_END_TOKEN : ;
+      YAML_BLOCK_MAPPING_START_TOKEN : ;
+      YAML_SCALAR_TOKEN : ;
+    end;
+
+    if FToken.token_type <> YAML_STREAM_END_TOKEN then
+      yaml_token_delete(@FToken);
+
+  until FToken.token_type = YAML_STREAM_END_TOKEN;
+
+  yaml_token_delete(@FToken);
+  Result := TVoidResult.Create(Longint(ERROR_NONE), True);
 end;
 
 end.

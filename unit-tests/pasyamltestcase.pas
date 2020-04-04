@@ -8,52 +8,6 @@ uses
   Classes, SysUtils, fpcunit, testregistry, libpasyaml, pasyaml, fgl;
 
 type
-
-  TLibYamlTokenBasedInputStringTestCase = class(TTestCase)
-  private
-    type
-      TTokenMap = class;
-      TToken    = class;
-  public
-    type
-      TBlockType = (
-        TYPE_BLOCK_MAP,
-        TYPE_BLOCK_SEQUENCE,
-        TYPE_BLOCK_SCALAR
-      );
-  protected
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestParseNodes;
-    procedure TestCheckParseNodes;
-  private
-    FParser : yaml_parser_t;
-    FToken : yaml_token_t;
-    FTokenMap : TTokenMap;
-  private
-    type
-      TToken = class
-      public
-        constructor Create (AName : string; ABlockType : TBlockType);
-      private
-        FName : string;
-        FBlockType : TBlockType;
-      end;
-
-      TTokenMap = class(specialize TFPGMap<String, TToken>)
-      public
-        constructor Create;
-        procedure Push (AToken : TToken);
-        function Pop : TToken;
-        function Top : TToken;
-      private
-        FTop : TToken;
-
-      end;
-  end;
-
-
   { TLibYamlTestCase }
 
   TLibYamlTestCase = class(TTestCase)
@@ -71,87 +25,6 @@ type
   end;
 
 implementation
-
-{ TLibYamlTokenBasedInputStringTestCase }
-
-procedure TLibYamlTokenBasedInputStringTestCase.SetUp;
-const
-  Input = 'title   : Finex 2011'                                  + sLineBreak +
-          'img_url : /finex/html/img/'                            + sLineBreak +
-          'css_url : /finex/html/style/'                          + sLineBreak +
-          'js_url  : /finex/html/js/'                             + sLineBreak +
-          ''                                                      + sLineBreak +
-          'template_dir: html/templ/'                             + sLineBreak +
-          ''                                                      + sLineBreak +
-          'default_act : idx    # used for invalid/missing act='  + sLineBreak +
-          ''                                                      + sLineBreak +
-          'pages:'                                                + sLineBreak +
-          '  - act   : idx'                                       + sLineBreak +
-          '    title : Welcome'                                   + sLineBreak +
-          '    html  : public/welcome.phtml'                      + sLineBreak +
-          '  - act   : reg'                                       + sLineBreak +
-          '    title : Register'                                  + sLineBreak +
-          '    html  : public/register.phtml'                     + sLineBreak +
-          '  - act   : log'                                       + sLineBreak +
-          '    title : Log in'                                    + sLineBreak +
-          '    html  : public/login.phtml'                        + sLineBreak +
-          '  - act   : out'                                       + sLineBreak +
-          '    title : Log out'                                   + sLineBreak +
-          '    html  : public/logout.phtml';
-var
-  Result : Integer;
-begin
-  FTokenType := TTokenType.Create;
-
-  Result := yaml_parser_initialize(@FParser);
-  if Result = 0 then
-    Fail('yaml_parser_initialize: initialize failed!');
-
-  yaml_parser_set_input_string(@FParser, PByte(PChar(Input)), Length(Input));
-end;
-
-procedure TLibYamlTokenBasedInputStringTestCase.TearDown;
-begin
-  yaml_parser_delete(@FParser);
-  FreeAndNil(FTokenType);
-end;
-
-procedure TLibYamlTokenBasedInputStringTestCase.TestParseNodes;
-var
-  Result : Integer;
-begin
-  repeat
-
-    Result := yaml_parser_scan(@FParser, @FToken);
-    if Result = 0 then
-      Fail('yaml_parser_scan: input string parse fail!');
-
-    if FToken.token_type <> YAML_STREAM_END_TOKEN then
-      yaml_token_delete(@FToken);
-
-  until FToken.token_type = YAML_STREAM_END_TOKEN;
-
-  yaml_token_delete(@FToken);
-end;
-
-procedure TLibYamlTokenBasedInputStringTestCase.TestCheckParseNodes;
-var
-  Result : Integer;
-begin
-  repeat
-
-    yaml_parser_scan(@FParser, @FToken);
-
-
-
-
-    if FToken.token_type <> YAML_STREAM_END_TOKEN then
-      yaml_token_delete(@FToken);
-
-  until FToken.token_type = YAML_STREAM_END_TOKEN;
-
-  yaml_token_delete(@FToken);
-end;
 
 { TYamlTestCase }
 
@@ -370,7 +243,6 @@ begin
 end;
 
 initialization
-  RegisterTest(TLibYamlTokenBasedInputStringTestCase);
   RegisterTest(TLibYamlTestCase);
   RegisterTest(TYamlTestCase);
 end.
