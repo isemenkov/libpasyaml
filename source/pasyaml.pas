@@ -52,10 +52,7 @@ type
       { Forward declarations }
       TOptionReader   = class;
       TVoidResult     = class;
-      TItemValue      = class;
-      TItemsMap       = class(specialize TFPGMap<String, TOptionReader>);
-  public
-    type
+
       { Errors codes }
       TErrors = (
         { All OK, no errors }
@@ -66,33 +63,13 @@ type
       { Document encoding }
       TEncoding = (
         { Let the parser choose the encoding. }
-        ENCODING_DEFAULT = Longint(YAML_ANY_ENCODING),
+        ENCODING_DEFAULT     = Longint(YAML_ANY_ENCODING),
         { The default UTF-8 encoding. }
-        ENCODING_UTF8    = Longint(YAML_UTF8_ENCODING),
+        ENCODING_UTF8        = Longint(YAML_UTF8_ENCODING),
         { The UTF-16-LE encoding with BOM. }
-        ENCODING_UTF16LE = Longint(YAML_UTF16LE_ENCODING),
+        ENCODING_UTF16LE     = Longint(YAML_UTF16LE_ENCODING),
         { The UTF-16-BE encoding with BOM. }
-        ENCODING_UTF16BE = Longint(YAML_UTF16BE_ENCODING)
-      );
-
-      { Yaml mapping style }
-      TMapStyle = (
-        { Let the emitter choose the style. }
-        MAP_STYLE_ANY   = Longint(YAML_ANY_MAPPING_STYLE),
-        { The block mapping style. }
-        MAP_STYLE_BLOCK = Longint(YAML_BLOCK_MAPPING_STYLE),
-        { The flow mapping style. }
-        MAP_STYLE_FLOW  = Longint(YAML_FLOW_MAPPING_STYLE)
-      );
-
-      { Yaml sequence style }
-      TSequenceStyle = (
-        { Let the emitter choose the style. }
-        SEQUENCE_STYLE_ANY = Longint(YAML_ANY_SEQUENCE_STYLE),
-        { The block sequence style. }
-        SEQUENCE_STYLE_BLOCK = Longint(YAML_BLOCK_SEQUENCE_STYLE),
-        { The flow sequence style. }
-        SEQUENCE_STYLE_FLOW = Longint(YAML_FLOW_SEQUENCE_STYLE)
+        ENCODING_UTF16BE     = Longint(YAML_UTF16BE_ENCODING)
       );
   public
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
@@ -101,19 +78,33 @@ type
     { Parse configuration from string }
     function Parse (ConfigString : String) : TVoidResult; {$IFNDEF DEBUG}inline;
       {$ENDIF}
+
   private
-    FParser : yaml_parser_t;
-    FToken : yaml_token_t;
-    FItems : TItemsMap;
-  protected
     const
       ERROR_OK                                                      =  1;
 
     type
       TItemValueType = (
         TYPE_SEQUENCE,
+        TYPE_SEQUENCE_ENTRY,
         TYPE_SCALAR
       );
+
+      TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
+
+      TItemValue = record
+        ValueType : TYamlFile.TItemValueType;
+        case Byte of
+          1 : (Sequence : TItemsMap);
+          2 : (Scalar : PChar);
+      end;
+
+      //TItemsStack = class(specialize TFPGList<TItemValue>);
+
+    var
+      FParser : yaml_parser_t;
+      FToken : yaml_token_t;
+      FItems : TItemsMap;
   public
     type
       { Result structure which stored value and error type if exists like GO
@@ -143,31 +134,23 @@ type
         property Value;
       end;
 
-      TItemValue = class
-      public
-
-      private
-        type
-          TValue = record
-          ValueType : TItemValueType;
-          case Byte of
-            1 : (Sequence : TItemsMap);
-            2 : (Scalar : PChar);
-          end;
-
-      private
-        FValue : TValue;
-      end;
-
       TOptionReader = class
       public
+
 
       private
         FValue : TItemValue;
       end;
   end;
 
+  operator=(ALeft, ARight : TYamlFile.TItemValue) : Boolean;
+
 implementation
+
+operator=(ALeft, ARight : TYamlFile.TItemValue) : Boolean;
+begin
+  Result := ALeft.ValueType = ARight.ValueType;
+end;
 
 { TYamlFile.TResult }
 
