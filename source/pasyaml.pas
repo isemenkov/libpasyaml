@@ -85,26 +85,53 @@ type
 
     type
       TItemValueType = (
+        TYPE_MAP,
         TYPE_SEQUENCE,
-        TYPE_SEQUENCE_ENTRY,
-        TYPE_SCALAR
+        TYPE_SEQUENCE_ENTRY
+      );
+
+      TItemMapValueToken = (
+        TOKEN_KEY,
+        TOKEN_VALUE
       );
 
       TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
 
+      TItemsStack = class
+      public
+        constructor Create;
+        destructor Destroy;override;
+
+        procedure Push (AValue : Integer);{$IFNDEF DEBUG}inline;{$ENDIF}
+        function Pop : Integer;{$IFNDEF DEBUG}inline;{$ENDIF}
+        function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
+      private
+        type
+          TIntegerList = specialize TFPGList<Integer>;
+
+        var
+          FList : TIntegerList;
+      end;
+
+      PItemValue = ^TItemValue;
       TItemValue = record
         ValueType : TYamlFile.TItemValueType;
         case Byte of
-          1 : (Sequence : TItemsMap);
-          2 : (Scalar : PChar);
+          1 : (Map : record
+                 Token : TItemMapValueToken;
+                 Key, Value : PChar;
+               end;
+              );
+          2 : (Sequence : TItemsMap);
+          3 : (Entry : PItemValue);
       end;
-
-      //TItemsStack = class(specialize TFPGList<TItemValue>);
 
     var
       FParser : yaml_parser_t;
       FToken : yaml_token_t;
       FItems : TItemsMap;
+      FStack : TItemsStack;
+      FItem : TItemValue;
   public
     type
       { Result structure which stored value and error type if exists like GO
@@ -143,13 +170,37 @@ type
       end;
   end;
 
-  operator=(ALeft, ARight : TYamlFile.TItemValue) : Boolean;
-
 implementation
 
-operator=(ALeft, ARight : TYamlFile.TItemValue) : Boolean;
+{ TItemsStack }
+
+constructor TYamlFile.TItemsStack.Create;
 begin
-  Result := ALeft.ValueType = ARight.ValueType;
+  FList := TIntegerList.Create;
+end;
+
+destructor TYamlFile.TItemsStack.Destroy;
+begin
+  FreeAndNil(FList);
+end;
+
+procedure TYamlFile.TItemsStack.Push (AValue : Integer);
+begin
+  FList.Add(AValue);
+end;
+
+function TYamlFile.TItemsStack.Pop : Integer;
+begin
+  if FList.Count > 0 then
+  begin
+    Result := FList.First;
+    FList.Remove(1);
+  end;
+end;
+
+function TYamlFile.TItemsStack.Count : Cardinal;
+begin
+  Result := FList.Count;
 end;
 
 { TYamlFile.TResult }
@@ -201,6 +252,8 @@ begin
   yaml_parser_set_input_string(@FParser, PByte(PChar(ConfigString)),
     Length(ConfigString));
 
+  FStack := TItemsStack.Create;
+
   repeat
 
     if yaml_parser_scan(@FParser, @FToken) <> ERROR_OK then
@@ -209,13 +262,43 @@ begin
     case FToken.token_type of
       YAML_STREAM_START_TOKEN : ;
       YAML_STREAM_END_TOKEN : ;
-      YAML_KEY_TOKEN : ;
-      YAML_VALUE_TOKEN : ;
+      YAML_KEY_TOKEN :
+        begin
+          if FItem.ValueType = TYPE_MAP then
+          begin
+            FItem.Map.Token := TOKEN_KEY;
+          end;
+        end;
+      YAML_VALUE_TOKEN :
+        begin
+          if FItem.ValueType = TYPE_MAP then
+          begin
+            FItem.Map.Token := TOKEN_VALUE;
+          end;
+        end;
       YAML_BLOCK_SEQUENCE_START_TOKEN : ;
       YAML_BLOCK_ENTRY_TOKEN : ;
       YAML_BLOCK_END_TOKEN : ;
-      YAML_BLOCK_MAPPING_START_TOKEN : ;
-      YAML_SCALAR_TOKEN : ;
+      YAML_BLOCK_MAPPING_START_TOKEN :
+        begin
+          FItem.ValueType := TYPE_MAP;
+        end;
+      YAML_SCALAR_TOKEN :
+        begin
+          if FItem.ValueType = TYPE_MAP then
+          begin
+            if FItem.Map.Token = TOKEN_KEY then
+            begin
+              FItem.Map.Key := PChar(FToken.token.scalar.value);
+            end else
+            if FItem.Map.Token = TOKEN_VALUE then
+            begin
+              FItem.Map.Value := PChar(FToken.token.scalar.value);
+
+
+            end;
+          end;
+        end;
     end;
 
     if FToken.token_type <> YAML_STREAM_END_TOKEN then
@@ -224,6 +307,7 @@ begin
   until FToken.token_type = YAML_STREAM_END_TOKEN;
 
   yaml_token_delete(@FToken);
+  FreeAndNil(FStack);
   Result := TVoidResult.Create(Longint(ERROR_NONE), True);
 end;
 
