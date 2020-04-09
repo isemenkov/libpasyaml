@@ -87,7 +87,8 @@ type
       TItemValueType = (
         TYPE_MAP,
         TYPE_SEQUENCE,
-        TYPE_SEQUENCE_ENTRY
+        TYPE_SEQUENCE_ENTRY,
+        TYPE_SCALAR
       );
 
       TItemMapValueToken = (
@@ -117,13 +118,14 @@ type
       TItemValue = record
         ValueType : TYamlFile.TItemValueType;
         case Byte of
-          1 : (Map : record
+          TYPE_MAP : (Map : record
                  Token : TItemMapValueToken;
                  Key, Value : PChar;
                end;
               );
-          2 : (Sequence : TItemsMap);
-          3 : (Entry : PItemValue);
+          TYPE_SEQUENCE : (Sequence : TItemsMap);
+          TYPE_SEQUENCE_ENTRY : (Entry : PItemValue);
+          TYPE_SCALAR : (Scalar : PChar);
       end;
 
     var
@@ -131,7 +133,7 @@ type
       FToken : yaml_token_t;
       FItems : TItemsMap;
       FStack : TItemsStack;
-      FItem : TItemValue;
+      FItem : PItemValue;
   public
     type
       { Result structure which stored value and error type if exists like GO
@@ -163,16 +165,17 @@ type
 
       TOptionReader = class
       public
-
+        constructor Create (AItem : PItemValue);
+        destructor Destroy; override;
 
       private
-        FValue : TItemValue;
+        FValue : PItemValue;
       end;
   end;
 
 implementation
 
-{ TItemsStack }
+{ TYamlFile.TItemsStack }
 
 constructor TYamlFile.TItemsStack.Create;
 begin
@@ -230,11 +233,25 @@ begin
   inherited Create (nil, AError, AOk);
 end;
 
+{ TYamlFile.TOptionReader }
+
+constructor TYamlFile.TOptionReader.Create (AItem : PItemValue);
+begin
+  FValue := AItem;
+end;
+
+destructor TYamlFile.TOptionReader.Destroy;
+begin
+
+  inherited Destroy;
+end;
+
 { TYamlConfig }
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
   FItems := TItemsMap.Create;
+  FItem := nil;
 
   if yaml_parser_initialize(@FParser) <> ERROR_OK then
     ;
@@ -248,6 +265,8 @@ begin
 end;
 
 function TYamlFile.Parse(ConfigString : String) : TVoidResult;
+var
+  key, value : string;
 begin
   yaml_parser_set_input_string(@FParser, PByte(PChar(ConfigString)),
     Length(ConfigString));
@@ -264,16 +283,16 @@ begin
       YAML_STREAM_END_TOKEN : ;
       YAML_KEY_TOKEN :
         begin
-          if FItem.ValueType = TYPE_MAP then
+          if FItem^.ValueType = TYPE_MAP then
           begin
-            FItem.Map.Token := TOKEN_KEY;
+            FItem^.Map.Token := TOKEN_KEY;
           end;
         end;
       YAML_VALUE_TOKEN :
         begin
-          if FItem.ValueType = TYPE_MAP then
+          if FItem^.ValueType = TYPE_MAP then
           begin
-            FItem.Map.Token := TOKEN_VALUE;
+            FItem^.Map.Token := TOKEN_VALUE;
           end;
         end;
       YAML_BLOCK_SEQUENCE_START_TOKEN : ;
@@ -281,21 +300,29 @@ begin
       YAML_BLOCK_END_TOKEN : ;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin
-          FItem.ValueType := TYPE_MAP;
+          New(FItem);
+          FItem^.ValueType := TYPE_MAP;
         end;
       YAML_SCALAR_TOKEN :
         begin
-          if FItem.ValueType = TYPE_MAP then
+          if FItem^.ValueType = TYPE_MAP then
           begin
-            if FItem.Map.Token = TOKEN_KEY then
+            if FItem^.Map.Token = TOKEN_KEY then
             begin
-              FItem.Map.Key := PChar(FToken.token.scalar.value);
-            end else
-            if FItem.Map.Token = TOKEN_VALUE then
+              value := PChar(FToken.token.scalar.value);
+              UniqueString(value);
+              FItem^.Map.Key := PChar(value);
+            end else if FItem^.Map.Token = TOKEN_VALUE then
             begin
-              FItem.Map.Value := PChar(FToken.token.scalar.value);
+              key := FItem^.Map.Key;
+              value := PChar(FToken.token.scalar.value);
+              UniqueString(value);
+              FItem^.ValueType := TYPE_SCALAR;
+              FItem^.Scalar := PChar(value);
+              FItems.Add(key, TOptionReader.Create(FItem));
 
-
+              New(FItem);
+              FItem^.ValueType := TYPE_MAP;
             end;
           end;
         end;
