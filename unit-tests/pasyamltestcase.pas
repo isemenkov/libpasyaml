@@ -32,6 +32,11 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
 
+  AssertTrue(YamlFile.Value['title'].AsString = 'Finex 2011');
+  AssertTrue(YamlFile.Value['img_url'].AsString = '/finex/html/img');
+  AssertTrue(YamlFile.Value['css_url'].AsString = '/finex/html/style');
+  AssertTrue(YamlFile.Value['js_url'].AsString = '/finex/html/js');
+
   FreeAndNil(YamlFile);
 end;
 

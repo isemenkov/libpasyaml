@@ -71,6 +71,9 @@ type
         { The UTF-16-BE encoding with BOM. }
         ENCODING_UTF16BE     = Longint(YAML_UTF16BE_ENCODING)
       );
+  private
+    function _GetValue (APath : String) : TOptionReader;{$IFNDEF DEBUG}inline;
+      {$ENDIF}
   public
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
@@ -79,6 +82,7 @@ type
     function Parse (ConfigString : String) : TVoidResult; {$IFNDEF DEBUG}inline;
       {$ENDIF}
 
+    property Value[Path : String] : TOptionReader read _GetValue;
   private
     const
       ERROR_OK                                                      =  1;
@@ -105,6 +109,7 @@ type
 
         procedure Push (AValue : Integer);{$IFNDEF DEBUG}inline;{$ENDIF}
         function Pop : Integer;{$IFNDEF DEBUG}inline;{$ENDIF}
+        function Top : Integer;{$IFNDEF DEBUG}inline;{$ENDIF}
         function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
       private
         type
@@ -119,10 +124,10 @@ type
         ValueType : TYamlFile.TItemValueType;
         case Byte of
           TYPE_MAP : (Map : record
-                 Token : TItemMapValueToken;
-                 Key, Value : PChar;
-               end;
-              );
+               Token : TItemMapValueToken;
+               Value : PChar;
+             end;
+            );
           TYPE_SEQUENCE : (Sequence : TItemsMap);
           TYPE_SEQUENCE_ENTRY : (Entry : PItemValue);
           TYPE_SCALAR : (Scalar : PChar);
@@ -164,9 +169,13 @@ type
       end;
 
       TOptionReader = class
+      private
+        function _AsString : String; {$IFNDEF DEBUG}inline;{$ENDIF}
       public
         constructor Create (AItem : PItemValue);
         destructor Destroy; override;
+
+        property AsString : String read _AsString;
 
       private
         FValue : PItemValue;
@@ -198,6 +207,14 @@ begin
   begin
     Result := FList.First;
     FList.Remove(1);
+  end;
+end;
+
+function TYamlFile.TItemsStack.Top : Integer;
+begin
+  if FList.Count > 0 then
+  begin
+    Result := FList.First;
   end;
 end;
 
@@ -242,11 +259,30 @@ end;
 
 destructor TYamlFile.TOptionReader.Destroy;
 begin
-
+  FreeAndNil(FValue);
   inherited Destroy;
 end;
 
-{ TYamlConfig }
+function TYamlFile.TOptionReader._AsString : String;
+begin
+  case FValue^.ValueType of
+    TYPE_MAP : begin
+
+    end;
+    TYPE_SEQUENCE : begin
+
+    end;
+    TYPE_SEQUENCE_ENTRY : begin
+
+    end;
+    TYPE_SCALAR : begin
+      Result := FValue^.Scalar;
+    end else
+    Result := '';
+  end;
+end;
+
+{ TYamlFile }
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
@@ -265,8 +301,29 @@ begin
 end;
 
 function TYamlFile.Parse(ConfigString : String) : TVoidResult;
-var
-  key, value : string;
+
+  procedure ProcessMapSection;{$IFNDEF DEBUG}inline;{$ENDIF}
+  var
+    key : String;
+  begin
+    if FItem^.Map.Token = TOKEN_KEY then
+    begin
+      FItem^.Map.Value := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1);
+      StrCopy(FItem^.Map.Value, PChar(FToken.token.scalar.value));
+    end
+    else if FItem^.Map.Token = TOKEN_VALUE then
+    begin
+      key := FItem^.Map.Value;
+      FItem^.ValueType := TYPE_SCALAR;
+      FItem^.Scalar := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1);
+      StrCopy(FItem^.Scalar, PChar(FToken.token.scalar.value));
+      FStack.Push(FItems.Add(key, TOptionReader.Create(FItem)));
+
+      New(FItem);
+      FItem^.ValueType := TYPE_MAP;
+    end;
+  end;
+
 begin
   yaml_parser_set_input_string(@FParser, PByte(PChar(ConfigString)),
     Length(ConfigString));
@@ -307,23 +364,7 @@ begin
         begin
           if FItem^.ValueType = TYPE_MAP then
           begin
-            if FItem^.Map.Token = TOKEN_KEY then
-            begin
-              value := PChar(FToken.token.scalar.value);
-              UniqueString(value);
-              FItem^.Map.Key := PChar(value);
-            end else if FItem^.Map.Token = TOKEN_VALUE then
-            begin
-              key := FItem^.Map.Key;
-              value := PChar(FToken.token.scalar.value);
-              UniqueString(value);
-              FItem^.ValueType := TYPE_SCALAR;
-              FItem^.Scalar := PChar(value);
-              FItems.Add(key, TOptionReader.Create(FItem));
-
-              New(FItem);
-              FItem^.ValueType := TYPE_MAP;
-            end;
+            ProcessMapSection;
           end;
         end;
     end;
@@ -336,6 +377,11 @@ begin
   yaml_token_delete(@FToken);
   FreeAndNil(FStack);
   Result := TVoidResult.Create(Longint(ERROR_NONE), True);
+end;
+
+function TYamlFile._GetValue (APath : String) : TOptionReader;
+begin
+  Result := FItems[APath];
 end;
 
 end.
