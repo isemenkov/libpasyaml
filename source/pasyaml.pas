@@ -102,23 +102,6 @@ type
 
       TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
 
-      TItemsStack = class
-      public
-        constructor Create;
-        destructor Destroy;override;
-
-        procedure Push (AValue : Integer);{$IFNDEF DEBUG}inline;{$ENDIF}
-        function Pop : Integer;{$IFNDEF DEBUG}inline;{$ENDIF}
-        function Top : Integer;{$IFNDEF DEBUG}inline;{$ENDIF}
-        function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
-      private
-        type
-          TIntegerList = specialize TFPGList<Integer>;
-
-        var
-          FList : TIntegerList;
-      end;
-
       PItemValue = ^TItemValue;
       TItemValue = record
         ValueType : TYamlFile.TItemValueType;
@@ -126,11 +109,32 @@ type
           TYPE_MAP : (Map : record
                Token : TItemMapValueToken;
                Value : PChar;
-             end;
+              end;
             );
           TYPE_SEQUENCE : (Sequence : TItemsMap);
-          TYPE_SEQUENCE_ENTRY : (Entry : PItemValue);
+          TYPE_SEQUENCE_ENTRY : (Entry : record
+                Container : PItemValue;
+                Value : PItemValue;
+              end;
+            );
           TYPE_SCALAR : (Scalar : PChar);
+      end;
+
+      TItemsStack = class
+      public
+        constructor Create;
+        destructor Destroy;override;
+
+        procedure Push (AValue : PItemValue);{$IFNDEF DEBUG}inline;{$ENDIF}
+        function Pop : PItemValue;{$IFNDEF DEBUG}inline;{$ENDIF}
+        function Top : PItemValue;{$IFNDEF DEBUG}inline;{$ENDIF}
+        function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
+      private
+        type
+          TIntegerList = specialize TFPGList<PItemValue>;
+
+        var
+          FList : TIntegerList;
       end;
 
     var
@@ -196,21 +200,21 @@ begin
   FreeAndNil(FList);
 end;
 
-procedure TYamlFile.TItemsStack.Push (AValue : Integer);
+procedure TYamlFile.TItemsStack.Push (AValue : PItemValue);
 begin
   FList.Add(AValue);
 end;
 
-function TYamlFile.TItemsStack.Pop : Integer;
+function TYamlFile.TItemsStack.Pop : PItemValue;
 begin
   if FList.Count > 0 then
   begin
     Result := FList.First;
-    FList.Remove(1);
+    FList.Remove(FList.Items[0]);
   end;
 end;
 
-function TYamlFile.TItemsStack.Top : Integer;
+function TYamlFile.TItemsStack.Top : PItemValue;
 begin
   if FList.Count > 0 then
   begin
@@ -305,10 +309,11 @@ function TYamlFile.Parse(ConfigString : String) : TVoidResult;
   procedure ProcessMapSection;{$IFNDEF DEBUG}inline;{$ENDIF}
   var
     key : String;
+    pos : Integer;
   begin
     if FItem^.Map.Token = TOKEN_KEY then
     begin
-      FItem^.Map.Value := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1);
+      FItem^.Map.Value := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) +1);
       StrCopy(FItem^.Map.Value, PChar(FToken.token.scalar.value));
     end
     else if FItem^.Map.Token = TOKEN_VALUE then
@@ -317,7 +322,8 @@ function TYamlFile.Parse(ConfigString : String) : TVoidResult;
       FItem^.ValueType := TYPE_SCALAR;
       FItem^.Scalar := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1);
       StrCopy(FItem^.Scalar, PChar(FToken.token.scalar.value));
-      FStack.Push(FItems.Add(key, TOptionReader.Create(FItem)));
+      FStack.Push(FItem);
+      FItems.Add(key, TOptionReader.Create(FItem));
 
       New(FItem);
       FItem^.ValueType := TYPE_MAP;
@@ -352,13 +358,34 @@ begin
             FItem^.Map.Token := TOKEN_VALUE;
           end;
         end;
-      YAML_BLOCK_SEQUENCE_START_TOKEN : ;
-      YAML_BLOCK_ENTRY_TOKEN : ;
-      YAML_BLOCK_END_TOKEN : ;
+      YAML_BLOCK_SEQUENCE_START_TOKEN :
+        begin
+          if FItem = nil then
+          begin
+            New(Fitem);
+          end;
+
+          FItem^.ValueType := TYPE_SEQUENCE;
+          FItem^.Sequence := TItemsMap.Create;
+          FStack.Push(FItem);
+        end;
+      YAML_BLOCK_ENTRY_TOKEN :
+        begin
+          New(FItem);
+          FItem^.ValueType := TYPE_SEQUENCE_ENTRY;
+          FItem^.Entry.Container := FStack.Top;
+          New(FItem^.Entry.Value);
+          FStack.Push(FItem^.Entry.Value);
+        end;
+      YAML_BLOCK_END_TOKEN :
+        begin
+          FStack.Pop;
+        end;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin
           New(FItem);
           FItem^.ValueType := TYPE_MAP;
+
         end;
       YAML_SCALAR_TOKEN :
         begin
