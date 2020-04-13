@@ -100,24 +100,20 @@ type
         TOKEN_VALUE
       );
 
-      TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
-
       PItemValue = ^TItemValue;
+      TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
+      TItemsSequence = class(specialize TFPGList<PItemValue>);
+
       TItemValue = record
         ValueType : TYamlFile.TItemValueType;
         case Byte of
-          TYPE_MAP : (Map : record
-               Token : TItemMapValueToken;
-               Value : PChar;
-              end;
-            );
-          TYPE_SEQUENCE : (Sequence : TItemsMap);
-          TYPE_SEQUENCE_ENTRY : (Entry : record
-                Container : PItemValue;
-                Value : PItemValue;
-              end;
-            );
-          TYPE_SCALAR : (Scalar : PChar);
+          TYPE_MAP :            (Map : record
+                                   Token : TItemMapValueToken;
+                                   Value : PChar;
+                                 end;);
+          TYPE_SEQUENCE :       (Sequence : TItemsSequence);
+          TYPE_SEQUENCE_ENTRY : (Entry : PItemValue);
+          TYPE_SCALAR :         (Scalar : PChar);
       end;
 
       TItemsStack = class
@@ -131,10 +127,10 @@ type
         function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
       private
         type
-          TIntegerList = specialize TFPGList<PItemValue>;
+          TItemsList = specialize TFPGList<PItemValue>;
 
         var
-          FList : TIntegerList;
+          FList : TItemsList;
       end;
 
     var
@@ -142,7 +138,6 @@ type
       FToken : yaml_token_t;
       FItems : TItemsMap;
       FStack : TItemsStack;
-      FItem : PItemValue;
   public
     type
       { Result structure which stored value and error type if exists like GO
@@ -192,7 +187,7 @@ implementation
 
 constructor TYamlFile.TItemsStack.Create;
 begin
-  FList := TIntegerList.Create;
+  FList := TItemsList.Create;
 end;
 
 destructor TYamlFile.TItemsStack.Destroy;
@@ -271,7 +266,7 @@ function TYamlFile.TOptionReader._AsString : String;
 begin
   case FValue^.ValueType of
     TYPE_MAP : begin
-
+      Result := FValue^.Map.Value;
     end;
     TYPE_SEQUENCE : begin
 
@@ -280,7 +275,7 @@ begin
 
     end;
     TYPE_SCALAR : begin
-      Result := FValue^.Scalar;
+      Result := FValue^.Scalar^;
     end else
     Result := '';
   end;
@@ -291,7 +286,6 @@ end;
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
   FItems := TItemsMap.Create;
-  FItem := nil;
 
   if yaml_parser_initialize(@FParser) <> ERROR_OK then
     ;
@@ -308,28 +302,32 @@ function TYamlFile.Parse(ConfigString : String) : TVoidResult;
 
   procedure ProcessMapSection;{$IFNDEF DEBUG}inline;{$ENDIF}
   var
-    key : String;
-    pos : Integer;
+    Key : PChar;
+    Item : PItemValue;
   begin
-    if FItem^.Map.Token = TOKEN_KEY then
-    begin
-      FItem^.Map.Value := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) +1);
-      StrCopy(FItem^.Map.Value, PChar(FToken.token.scalar.value));
-    end
-    else if FItem^.Map.Token = TOKEN_VALUE then
-    begin
-      key := FItem^.Map.Value;
-      FItem^.ValueType := TYPE_SCALAR;
-      FItem^.Scalar := StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1);
-      StrCopy(FItem^.Scalar, PChar(FToken.token.scalar.value));
-      FStack.Push(FItem);
-      FItems.Add(key, TOptionReader.Create(FItem));
-
-      New(FItem);
-      FItem^.ValueType := TYPE_MAP;
+    case FStack.Top^.Map.Token of
+      TOKEN_KEY :
+        begin
+          FStack.Top^.Map.Value :=
+            StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+            PChar(FToken.token.scalar.value));
+        end;
+      TOKEN_VALUE :
+        begin
+          Key := FStack.Top^.Map.Value;
+          FStack.Top^.Map.Value :=
+            StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+            PChar(FToken.token.scalar.value));
+          FItems.Add(Key, TOptionReader.Create(FStack.Pop));
+          New(Item);
+          FStack.Push(Item);
+          FStack.Top^.ValueType := TYPE_MAP;
+        end;
     end;
   end;
 
+var
+  Item : PItemValue;
 begin
   yaml_parser_set_input_string(@FParser, PByte(PChar(ConfigString)),
     Length(ConfigString));
@@ -345,53 +343,35 @@ begin
       YAML_STREAM_START_TOKEN : ;
       YAML_STREAM_END_TOKEN : ;
       YAML_KEY_TOKEN :
+        if FStack.Count > 0 then
         begin
-          if FItem^.ValueType = TYPE_MAP then
-          begin
-            FItem^.Map.Token := TOKEN_KEY;
-          end;
+          FStack.Top^.Map.Token := TOKEN_KEY;
         end;
       YAML_VALUE_TOKEN :
+        if FStack.Count > 0 then
         begin
-          if FItem^.ValueType = TYPE_MAP then
-          begin
-            FItem^.Map.Token := TOKEN_VALUE;
-          end;
+          FStack.Top^.Map.Token := TOKEN_VALUE;
         end;
       YAML_BLOCK_SEQUENCE_START_TOKEN :
-        begin
-          if FItem = nil then
-          begin
-            New(Fitem);
-          end;
-
-          FItem^.ValueType := TYPE_SEQUENCE;
-          FItem^.Sequence := TItemsMap.Create;
-          FStack.Push(FItem);
-        end;
+        ;
       YAML_BLOCK_ENTRY_TOKEN :
-        begin
-          New(FItem);
-          FItem^.ValueType := TYPE_SEQUENCE_ENTRY;
-          FItem^.Entry.Container := FStack.Top;
-          New(FItem^.Entry.Value);
-          FStack.Push(FItem^.Entry.Value);
-        end;
+        ;
       YAML_BLOCK_END_TOKEN :
-        begin
-          FStack.Pop;
-        end;
+        ;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin
-          New(FItem);
-          FItem^.ValueType := TYPE_MAP;
-
+          New(Item);
+          FStack.Push(Item);
+          FStack.Top^.ValueType := TYPE_MAP;
         end;
       YAML_SCALAR_TOKEN :
+        if FStack.Count > 0 then
         begin
-          if FItem^.ValueType = TYPE_MAP then
-          begin
-            ProcessMapSection;
+          case FStack.Top^.ValueType of
+            TYPE_MAP :               ProcessMapSection;
+            TYPE_SEQUENCE : ;
+            TYPE_SEQUENCE_ENTRY : ;
+            TYPE_SCALAR : ;
           end;
         end;
     end;
@@ -401,8 +381,12 @@ begin
 
   until FToken.token_type = YAML_STREAM_END_TOKEN;
 
+  if FStack.Count = 0 then
+    FreeAndNil(FStack)
+  else
+    ;
+
   yaml_token_delete(@FToken);
-  FreeAndNil(FStack);
   Result := TVoidResult.Create(Longint(ERROR_NONE), True);
 end;
 
