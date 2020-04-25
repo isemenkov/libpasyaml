@@ -308,20 +308,38 @@ function TYamlFile.Parse(ConfigString : String) : TVoidResult;
     case FStack.Top^.Map.Token of
       TOKEN_KEY :
         begin
-          FStack.Top^.Map.Value :=
-            StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
-            PChar(FToken.token.scalar.value));
+          if FStack.Top^.ValueType = TYPE_SEQUENCE_ENTRY then
+          begin
+            FStack.Top^.Entry^.Map.Value :=
+              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+              PChar(FToken.token.scalar.value));
+          end else
+          begin
+            FStack.Top^.Map.Value :=
+              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+              PChar(FToken.token.scalar.value));
+          end;
         end;
       TOKEN_VALUE :
         begin
-          Key := FStack.Top^.Map.Value;
-          FStack.Top^.Map.Value :=
-            StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
-            PChar(FToken.token.scalar.value));
-          FItems.Add(Key, TOptionReader.Create(FStack.Pop));
-          New(Item);
-          FStack.Push(Item);
-          FStack.Top^.ValueType := TYPE_MAP;
+          if FStack.Top^.ValueType = TYPE_SEQUENCE_ENTRY then
+          begin
+            Key := FStack.Top^.Entry^.Map.Value;
+            FStack.Top^.Entry^.Map.Value :=
+              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+              PChar(FToken.token.scalar.value));
+            FItems.Add(Key, TOptionReader.Create(FStack.Pop^.Entry));
+          end else
+          begin
+            Key := FStack.Top^.Map.Value;
+            FStack.Top^.Map.Value :=
+              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+              PChar(FToken.token.scalar.value));
+            FItems.Add(Key, TOptionReader.Create(FStack.Pop));
+            New(Item);
+            FStack.Push(Item);
+            FStack.Top^.ValueType := TYPE_MAP;
+          end;
         end;
     end;
   end;
@@ -360,9 +378,16 @@ begin
         ;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin
-          New(Item);
-          FStack.Push(Item);
-          FStack.Top^.ValueType := TYPE_MAP;
+          if FStack.Top^.ValueType = TYPE_SEQUENCE_ENTRY then
+          begin
+            New(FStack.Top^.Entry);
+            FStack.Top^.Entry^.ValueType := TYPE_MAP;
+          end else
+          begin
+            New(Item);
+            FStack.Push(Item);
+            FStack.Top^.ValueType := TYPE_MAP;
+          end;
         end;
       YAML_SCALAR_TOKEN :
         if FStack.Count > 0 then
