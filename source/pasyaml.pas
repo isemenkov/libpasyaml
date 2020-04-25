@@ -89,6 +89,7 @@ type
 
     type
       TItemValueType = (
+        TYPE_NONE,
         TYPE_MAP,
         TYPE_SEQUENCE,
         TYPE_SEQUENCE_ENTRY,
@@ -121,7 +122,8 @@ type
         constructor Create;
         destructor Destroy;override;
 
-        procedure Push (AValue : PItemValue);{$IFNDEF DEBUG}inline;{$ENDIF}
+        procedure Push;{$IFNDEF DEBUG}inline;{$ENDIF}
+        procedure Push (AItem : PItemValue);{$IFNDEF DEBUG}inline;{$ENDIF}
         function Pop : PItemValue;{$IFNDEF DEBUG}inline;{$ENDIF}
         function Top : PItemValue;{$IFNDEF DEBUG}inline;{$ENDIF}
         function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
@@ -195,9 +197,15 @@ begin
   FreeAndNil(FList);
 end;
 
-procedure TYamlFile.TItemsStack.Push (AValue : PItemValue);
+procedure TYamlFile.TItemsStack.Push;
 begin
-  FList.Add(AValue);
+  FList.Add(New(PItemValue));
+  FList.First^.ValueType := TYPE_NONE;
+end;
+
+procedure TYamlFile.TitemsStack.Push (AItem : PItemValue);
+begin
+  FList.Add(AItem);
 end;
 
 function TYamlFile.TItemsStack.Pop : PItemValue;
@@ -206,6 +214,9 @@ begin
   begin
     Result := FList.First;
     FList.Remove(FList.Items[0]);
+  end else
+  begin
+    Result := New(PItemValue);
   end;
 end;
 
@@ -213,6 +224,10 @@ function TYamlFile.TItemsStack.Top : PItemValue;
 begin
   if FList.Count > 0 then
   begin
+    Result := FList.First;
+  end else
+  begin
+    FList.Add(New(PItemValue));
     Result := FList.First;
   end;
 end;
@@ -300,46 +315,24 @@ end;
 
 function TYamlFile.Parse(ConfigString : String) : TVoidResult;
 
-  procedure ProcessMapSection;{$IFNDEF DEBUG}inline;{$ENDIF}
+  procedure ProcessMap;{$IFNDEF DEBUG}inline;{$ENDIF}
   var
     Key : PChar;
-    Item : PItemValue;
   begin
     case FStack.Top^.Map.Token of
       TOKEN_KEY :
         begin
-          if FStack.Top^.ValueType = TYPE_SEQUENCE_ENTRY then
-          begin
-            FStack.Top^.Entry^.Map.Value :=
-              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+          FStack.Top^.Map.Value :=
+            StrCopy(StrAlloc(StrLen(PChar(FToken.token.scalar.value)) + 1),
               PChar(FToken.token.scalar.value));
-          end else
-          begin
-            FStack.Top^.Map.Value :=
-              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
-              PChar(FToken.token.scalar.value));
-          end;
         end;
       TOKEN_VALUE :
         begin
-          if FStack.Top^.ValueType = TYPE_SEQUENCE_ENTRY then
-          begin
-            Key := FStack.Top^.Entry^.Map.Value;
-            FStack.Top^.Entry^.Map.Value :=
-              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
+          Key := FStack.Top^.Map.Value;
+          FStack.Top^.Map.Value :=
+            StrCopy(StrAlloc(StrLen(PChar(FToken.token.scalar.value)) + 1),
               PChar(FToken.token.scalar.value));
-            FItems.Add(Key, TOptionReader.Create(FStack.Pop^.Entry));
-          end else
-          begin
-            Key := FStack.Top^.Map.Value;
-            FStack.Top^.Map.Value :=
-              StrCopy(StrAlloc(Strlen(PChar(FToken.token.scalar.value)) + 1),
-              PChar(FToken.token.scalar.value));
-            FItems.Add(Key, TOptionReader.Create(FStack.Pop));
-            New(Item);
-            FStack.Push(Item);
-            FStack.Top^.ValueType := TYPE_MAP;
-          end;
+          FItems.Add(Key, TOptionReader.Create(FStack.Pop));
         end;
     end;
   end;
@@ -361,43 +354,66 @@ begin
       YAML_STREAM_START_TOKEN : ;
       YAML_STREAM_END_TOKEN : ;
       YAML_KEY_TOKEN :
-        if FStack.Count > 0 then
         begin
+          if (FStack.Count = 0) or (FStack.Top^.ValueType <> TYPE_NONE) then
+          begin
+            FStack.Push;
+          end;
+          FStack.Top^.ValueType := TYPE_MAP;
           FStack.Top^.Map.Token := TOKEN_KEY;
         end;
       YAML_VALUE_TOKEN :
-        if FStack.Count > 0 then
         begin
           FStack.Top^.Map.Token := TOKEN_VALUE;
         end;
       YAML_BLOCK_SEQUENCE_START_TOKEN :
-        ;
-      YAML_BLOCK_ENTRY_TOKEN :
-        ;
-      YAML_BLOCK_END_TOKEN :
-        ;
-      YAML_BLOCK_MAPPING_START_TOKEN :
         begin
-          if FStack.Top^.ValueType = TYPE_SEQUENCE_ENTRY then
-          begin
-            New(FStack.Top^.Entry);
-            FStack.Top^.Entry^.ValueType := TYPE_MAP;
-          end else
-          begin
-            New(Item);
-            FStack.Push(Item);
-            FStack.Top^.ValueType := TYPE_MAP;
-          end;
+          FStack.Push;
+          FStack.Top^.ValueType := TYPE_SEQUENCE;
+          FStack.Top^.Sequence := TItemsSequence.Create;
         end;
-      YAML_SCALAR_TOKEN :
-        if FStack.Count > 0 then
+      YAML_BLOCK_ENTRY_TOKEN :
+        begin
+          FStack.Push;
+          FStack.Top^.ValueType := TYPE_SEQUENCE_ENTRY;
+          New(FStack.Top^.Entry);
+          FStack.Push(FStack.Top^.Entry);
+          FStack.Top^.ValueType := TYPE_NONE;
+        end;
+      YAML_BLOCK_END_TOKEN :
         begin
           case FStack.Top^.ValueType of
-            TYPE_MAP :               ProcessMapSection;
-            TYPE_SEQUENCE : ;
-            TYPE_SEQUENCE_ENTRY : ;
-            TYPE_SCALAR : ;
+            TYPE_SEQUENCE_ENTRY :
+              begin
+                Item := FStack.Pop;
+                if FStack.Top^.ValueType = TYPE_SEQUENCE then
+                begin
+                  FStack.Top^.Sequence.Add(Item);  // TODO add stack throught method
+                end;
+              end;
+            TYPE_SEQUENCE :
+              begin
+                Item := FStack.Pop;
+                if FStack.Top^.ValueType = TYPE_MAP then
+                begin
+                  FItems.Add(FStack.Top^.Map.Value, TOptionReader.Create(Item));
+                  FStack.Pop;
+                end;
+              end;
+            TYPE_MAP :
+              begin
+                FStack.Pop;
+              end;
           end;
+        end;
+      YAML_BLOCK_MAPPING_START_TOKEN :
+        begin
+          FStack.Push;
+          FStack.Top^.ValueType := TYPE_MAP;
+        end;
+      YAML_SCALAR_TOKEN :
+        begin
+          ProcessMap;
         end;
     end;
 
