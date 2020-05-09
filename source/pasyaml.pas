@@ -71,9 +71,8 @@ type
         { The UTF-16-BE encoding with BOM. }
         ENCODING_UTF16BE     = Longint(YAML_UTF16BE_ENCODING)
       );
-  private
-    function _GetValue (APath : String) : TOptionReader;{$IFNDEF DEBUG}inline;
-      {$ENDIF}
+  protected
+    function GetValue (AKey : String) : TOptionReader;
   public
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
@@ -82,7 +81,7 @@ type
     function Parse (ConfigString : String) : TVoidResult; {$IFNDEF DEBUG}inline;
       {$ENDIF}
 
-    property Value[Path : String] : TOptionReader read _GetValue;
+    property Value [AKey : String] : TOptionReader read GetValue;
   private
     const
       ERROR_OK                                                      =  1;
@@ -91,42 +90,37 @@ type
       TItemValueType = (
         TYPE_NONE,
         TYPE_MAP,
+        TYPE_MAP_KEY,
+        TYPE_MAP_VALUE,
         TYPE_SEQUENCE,
         TYPE_SEQUENCE_ENTRY,
         TYPE_SCALAR
       );
 
-      TItemMapValueToken = (
-        TOKEN_KEY,
-        TOKEN_VALUE
-      );
-
       PItemValue = ^TItemValue;
       TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
-      TItemsSequence = class(specialize TFPGList<PItemValue>);
+      TItemsList = class(specialize TFPGList<TOptionReader>);
 
       TItemValue = record
         ValueType : TYamlFile.TItemValueType;
         case Byte of
-          TYPE_MAP :            (Map : record
-                                   Token : TItemMapValueToken;
-                                   Value : PChar;
-                                 end;);
-          TYPE_SEQUENCE :       (Sequence : TItemsSequence);
-          TYPE_SEQUENCE_ENTRY : (Entry : PItemValue);
+          TYPE_MAP :            (Map : TItemsMap);
+          TYPE_MAP_KEY :        (Key : PChar);
+          TYPE_MAP_VALUE :      (Value : PChar);
+          TYPE_SEQUENCE :       (Sequence : TItemsList);
           TYPE_SCALAR :         (Scalar : PChar);
       end;
 
-      TItemsStack = class
+      TItemsSequence = class
       public
         constructor Create;
-        destructor Destroy;override;
+        destructor Destroy; override;
 
-        procedure Push;{$IFNDEF DEBUG}inline;{$ENDIF}
-        procedure Push (AItem : PItemValue);{$IFNDEF DEBUG}inline;{$ENDIF}
-        function Pop : PItemValue;{$IFNDEF DEBUG}inline;{$ENDIF}
-        function Top : PItemValue;{$IFNDEF DEBUG}inline;{$ENDIF}
-        function Count : Cardinal;{$IFNDEF DEBUG}inline;{$ENDIF}
+        procedure PushBack (AItemType : TYamlFile.TItemValueType);
+        function First : PItemValue;
+        function FirstPop : PItemValue;
+        function Last : PItemValue;
+        function LastPop : PItemValue;
       private
         type
           TItemsList = specialize TFPGList<PItemValue>;
@@ -137,9 +131,7 @@ type
 
     var
       FParser : yaml_parser_t;
-      FToken : yaml_token_t;
-      FItems : TItemsMap;
-      FStack : TItemsStack;
+      FRoot : TOptionReader;
   public
     type
       { Result structure which stored value and error type if exists like GO
@@ -170,71 +162,71 @@ type
       end;
 
       TOptionReader = class
-      private
-        function _AsString : String; {$IFNDEF DEBUG}inline;{$ENDIF}
       public
-        constructor Create (AItem : PItemValue);
+        constructor Create (AType : TYamlFile.TItemValueType);
         destructor Destroy; override;
 
-        property AsString : String read _AsString;
-
+        function AsString : String;
       private
-        FValue : PItemValue;
+        FValue : TItemValue;
       end;
   end;
 
 implementation
 
-{ TYamlFile.TItemsStack }
+{ TYamlFile.TItemsSequence }
 
-constructor TYamlFile.TItemsStack.Create;
+constructor TYamlFile.TItemsSequence.Create;
 begin
   FList := TItemsList.Create;
 end;
 
-destructor TYamlFile.TItemsStack.Destroy;
+destructor TYamlFile.TItemsSequence.Destroy;
 begin
   FreeAndNil(FList);
+
+  inherited Destroy;
 end;
 
-procedure TYamlFile.TItemsStack.Push;
+procedure TYamlFile.TItemsSequence.PushBack (AItemType :
+  TYamlFile.TItemValueType);
 begin
   FList.Add(New(PItemValue));
-  FList.First^.ValueType := TYPE_NONE;
+  FList.Last^.ValueType := AItemType;
 end;
 
-procedure TYamlFile.TitemsStack.Push (AItem : PItemValue);
+function TYamlFile.TItemsSequence.First : PItemValue;
 begin
-  FList.Add(AItem);
+  Result := FList.First;
 end;
 
-function TYamlFile.TItemsStack.Pop : PItemValue;
+function TYamlFile.TItemsSequence.Last : PItemValue;
 begin
-  if FList.Count > 0 then
-  begin
-    Result := FList.First;
-    FList.Remove(FList.Items[0]);
-  end else
-  begin
-    Result := New(PItemValue);
-  end;
+  Result := FList.Last;
 end;
 
-function TYamlFile.TItemsStack.Top : PItemValue;
+function TYamlFile.TItemsSequence.FirstPop : PItemValue;
 begin
   if FList.Count > 0 then
   begin
     Result := FList.First;
+    FList.Delete(0);
   end else
   begin
-    FList.Add(New(PItemValue));
-    Result := FList.First;
+    Result := nil;
   end;
 end;
 
-function TYamlFile.TItemsStack.Count : Cardinal;
+function TYamlFile.TItemsSequence.LastPop : PItemValue;
 begin
-  Result := FList.Count;
+  if FList.Count > 0 then
+  begin
+    Result := FList.Last;
+    FList.Delete(FList.Count - 1);
+  end else
+  begin
+    Result := nil;
+  end;
 end;
 
 { TYamlFile.TResult }
@@ -266,41 +258,48 @@ end;
 
 { TYamlFile.TOptionReader }
 
-constructor TYamlFile.TOptionReader.Create (AItem : PItemValue);
+constructor TYamlFile.TOptionReader.Create (AType : TYamlFile.TItemValueType);
 begin
-  FValue := AItem;
+  FValue.ValueType := AType;
+
+  case AType of
+    TYPE_MAP :
+      begin
+        FValue.Map := TItemsMap.Create;
+      end;
+    TYPE_SEQUENCE :
+      begin
+        FValue.Sequence := TItemsList.Create;
+      end;
+  end;
 end;
 
 destructor TYamlFile.TOptionReader.Destroy;
 begin
-  FreeAndNil(FValue);
+  case FValue.ValueType of
+    TYPE_MAP :
+      begin
+        FreeAndNil(FValue.Map);
+      end;
+    TYPE_SEQUENCE :
+      begin
+        FreeAndNil(FValue.Sequence);
+      end;
+  end;
+
   inherited Destroy;
 end;
 
-function TYamlFile.TOptionReader._AsString : String;
+function TYamlFile.TOptionReader.AsString : String;
 begin
-  case FValue^.ValueType of
-    TYPE_MAP : begin
-      Result := FValue^.Map.Value;
-    end;
-    TYPE_SEQUENCE : begin
-
-    end;
-    TYPE_SEQUENCE_ENTRY : begin
-
-    end;
-    TYPE_SCALAR : begin
-      Result := FValue^.Scalar^;
-    end else
-    Result := '';
-  end;
+  Result := FValue.Scalar;
 end;
 
 { TYamlFile }
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
-  FItems := TItemsMap.Create;
+  FRoot := TOptionReader.Create(TYPE_NONE);
 
   if yaml_parser_initialize(@FParser) <> ERROR_OK then
     ;
@@ -309,131 +308,132 @@ end;
 destructor TYamlFile.Destroy;
 begin
   yaml_parser_delete(@FParser);
-  FreeAndNil(FItems);
+  FreeAndNil(FRoot);
   inherited Destroy;
 end;
 
 function TYamlFile.Parse(ConfigString : String) : TVoidResult;
+var
+  Tokens : TItemsSequence;
+  Token : yaml_token_t;
 
-  procedure ProcessMap;{$IFNDEF DEBUG}inline;{$ENDIF}
+  procedure ProcessTokens;
   var
-    Key : PChar;
+    Item : PItemValue;
+    Sequence : TItemsSequence;
   begin
-    case FStack.Top^.Map.Token of
-      TOKEN_KEY :
-        begin
-          FStack.Top^.Map.Value :=
-            StrCopy(StrAlloc(StrLen(PChar(FToken.token.scalar.value)) + 1),
-              PChar(FToken.token.scalar.value));
-        end;
-      TOKEN_VALUE :
-        begin
-          Key := FStack.Top^.Map.Value;
-          FStack.Top^.Map.Value :=
-            StrCopy(StrAlloc(StrLen(PChar(FToken.token.scalar.value)) + 1),
-              PChar(FToken.token.scalar.value));
-          FItems.Add(Key, TOptionReader.Create(FStack.Pop));
-        end;
+    Sequence := TItemsSequence.Create;
+    Sequence.FList.Add(@FRoot.FValue);
+
+    Item := Tokens.FirstPop;
+    while Item <> nil do
+    begin
+      case Item^.ValueType of
+        TYPE_NONE : ;
+        TYPE_MAP :
+          begin
+            if Sequence.Last^.ValueType = TYPE_NONE then
+            begin
+              Sequence.Last^.ValueType := TYPE_MAP;
+              Sequence.Last^.Map := TItemsMap.Create;
+            end;
+          end;
+        TYPE_MAP_KEY :
+          begin
+            if Tokens.First^.ValueType = TYPE_MAP_VALUE then
+            begin
+              Sequence.Last^.Map[Item^.Key] :=
+                TOptionReader.Create(TYPE_SCALAR);
+              Sequence.Last^.Map[Item^.Key].FValue.Scalar :=
+                Tokens.FirstPop^.Value;
+            end;
+          end;
+        TYPE_SEQUENCE :
+          begin
+            if Sequence.Last^.ValueType = TYPE_NONE then
+            begin
+              Sequence.Last^.Sequence := TItemsList.Create;
+            end;
+          end;
+        TYPE_SEQUENCE_ENTRY : ;
+      end;
+      Item := Tokens.FirstPop;
     end;
   end;
 
-var
-  Item : PItemValue;
 begin
   yaml_parser_set_input_string(@FParser, PByte(PChar(ConfigString)),
     Length(ConfigString));
 
-  FStack := TItemsStack.Create;
-
   repeat
 
-    if yaml_parser_scan(@FParser, @FToken) <> ERROR_OK then
+    if yaml_parser_scan(@FParser, @Token) <> ERROR_OK then
       ;
 
-    case FToken.token_type of
-      YAML_STREAM_START_TOKEN : ;
-      YAML_STREAM_END_TOKEN : ;
+    case Token.token_type of
+      YAML_STREAM_START_TOKEN :
+        begin
+          Tokens := TItemsSequence.Create;
+        end;
+      YAML_STREAM_END_TOKEN :
+        begin
+          ProcessTokens;
+        end;
       YAML_KEY_TOKEN :
         begin
-          if (FStack.Count = 0) or (FStack.Top^.ValueType <> TYPE_NONE) then
-          begin
-            FStack.Push;
-          end;
-          FStack.Top^.ValueType := TYPE_MAP;
-          FStack.Top^.Map.Token := TOKEN_KEY;
+          Tokens.PushBack(TYPE_MAP_KEY);
         end;
       YAML_VALUE_TOKEN :
         begin
-          FStack.Top^.Map.Token := TOKEN_VALUE;
+          Tokens.PushBack(TYPE_MAP_VALUE);
         end;
       YAML_BLOCK_SEQUENCE_START_TOKEN :
         begin
-          FStack.Push;
-          FStack.Top^.ValueType := TYPE_SEQUENCE;
-          FStack.Top^.Sequence := TItemsSequence.Create;
+
         end;
       YAML_BLOCK_ENTRY_TOKEN :
         begin
-          FStack.Push;
-          FStack.Top^.ValueType := TYPE_SEQUENCE_ENTRY;
-          New(FStack.Top^.Entry);
-          FStack.Push(FStack.Top^.Entry);
-          FStack.Top^.ValueType := TYPE_NONE;
+
         end;
       YAML_BLOCK_END_TOKEN :
         begin
-          case FStack.Top^.ValueType of
-            TYPE_SEQUENCE_ENTRY :
-              begin
-                Item := FStack.Pop;
-                if FStack.Top^.ValueType = TYPE_SEQUENCE then
-                begin
-                  FStack.Top^.Sequence.Add(Item);  // TODO add stack throught method
-                end;
-              end;
-            TYPE_SEQUENCE :
-              begin
-                Item := FStack.Pop;
-                if FStack.Top^.ValueType = TYPE_MAP then
-                begin
-                  FItems.Add(FStack.Top^.Map.Value, TOptionReader.Create(Item));
-                  FStack.Pop;
-                end;
-              end;
-            TYPE_MAP :
-              begin
-                FStack.Pop;
-              end;
-          end;
+
         end;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin
-          FStack.Push;
-          FStack.Top^.ValueType := TYPE_MAP;
+          Tokens.PushBack(TYPE_MAP);
         end;
       YAML_SCALAR_TOKEN :
         begin
-          ProcessMap;
+          if Tokens.Last^.ValueType = TYPE_MAP_KEY then
+          begin
+            Tokens.Last^.Key :=
+              StrCopy(StrAlloc(StrLen(PChar(Token.token.scalar.value)) + 1),
+                PChar(Token.token.scalar.value));
+          end else
+          if Tokens.Last^.ValueType = TYPE_MAP_VALUE then
+          begin
+            Tokens.Last^.Value :=
+              StrCopy(StrAlloc(StrLen(PChar(Token.token.scalar.value)) + 1),
+                PChar(Token.token.scalar.value));
+          end;
         end;
     end;
 
-    if FToken.token_type <> YAML_STREAM_END_TOKEN then
-      yaml_token_delete(@FToken);
+    if Token.token_type <> YAML_STREAM_END_TOKEN then
+      yaml_token_delete(@Token);
 
-  until FToken.token_type = YAML_STREAM_END_TOKEN;
+  until Token.token_type = YAML_STREAM_END_TOKEN;
 
-  if FStack.Count = 0 then
-    FreeAndNil(FStack)
-  else
-    ;
 
-  yaml_token_delete(@FToken);
+  FreeAndNil(Tokens);
+  yaml_token_delete(@Token);
   Result := TVoidResult.Create(Longint(ERROR_NONE), True);
 end;
 
-function TYamlFile._GetValue (APath : String) : TOptionReader;
+function TYamlFile.GetValue (AKey : String) : TOptionReader;
 begin
-  Result := FItems[APath];
+  Result := FRoot.FValue.Map[AKey];
 end;
 
 end.
