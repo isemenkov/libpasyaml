@@ -94,7 +94,8 @@ type
         TYPE_MAP_VALUE,
         TYPE_SEQUENCE,
         TYPE_SEQUENCE_ENTRY,
-        TYPE_SCALAR
+        TYPE_SCALAR,
+        TYPE_END_BLOCK
       );
 
       PItemValue = ^TItemValue;
@@ -329,12 +330,15 @@ var
     while Item <> nil do
     begin
       case Item^.ValueType of
-        TYPE_NONE : ;
         TYPE_MAP :
           begin
             if Sequence.Last^.ValueType = TYPE_NONE then
             begin
               Sequence.Last^.ValueType := TYPE_MAP;
+              Sequence.Last^.Map := TItemsMap.Create;
+            end else
+            begin
+              Sequence.PushBack(TYPE_MAP);
               Sequence.Last^.Map := TItemsMap.Create;
             end;
           end;
@@ -352,10 +356,22 @@ var
           begin
             if Sequence.Last^.ValueType = TYPE_NONE then
             begin
+              Sequence.Last^.ValueType := TYPE_SEQUENCE;
+              Sequence.Last^.Sequence := TItemsList.Create;
+            end else
+            begin
+              Sequence.PushBack(TYPE_SEQUENCE);
               Sequence.Last^.Sequence := TItemsList.Create;
             end;
           end;
-        TYPE_SEQUENCE_ENTRY : ;
+        TYPE_SEQUENCE_ENTRY :
+          begin
+            Sequence.PushBack(TYPE_NONE);
+          end;
+        TYPE_END_BLOCK :
+          begin
+            Sequence.LastPop;
+          end;
       end;
       Item := Tokens.FirstPop;
     end;
@@ -389,15 +405,15 @@ begin
         end;
       YAML_BLOCK_SEQUENCE_START_TOKEN :
         begin
-
+          Tokens.PushBack(TYPE_SEQUENCE);
         end;
       YAML_BLOCK_ENTRY_TOKEN :
         begin
-
+          Tokens.PushBack(TYPE_SEQUENCE_ENTRY);
         end;
       YAML_BLOCK_END_TOKEN :
         begin
-
+          Tokens.PushBack(TYPE_END_BLOCK);
         end;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin

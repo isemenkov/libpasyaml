@@ -46,13 +46,15 @@ const
   config : string = 'title     : Finex 2011'                      + sLineBreak +
                     'pages:'                                      + sLineBreak +
                     '  - act   : idx'                             + sLineBreak +
-                    '    title : welcome';
+                    '    title : welcome'                         + sLineBreak +
+                    'img_url   : /finex/html/img';
 var
   YamlFile : TYamlFile;
 begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
   AssertTrue(YamlFile.Value['title'].AsString = 'Finex 2011');
+  AssertTrue(YamlFile.Value['img_url'].AsString = '/finex/html/img');
 
   FreeAndNil(YamlFile);
 end;
