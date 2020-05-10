@@ -34,6 +34,7 @@
 unit pasyaml;
 
 {$mode objfpc}{$H+}
+{$modeswitch typehelpers}
 {$IFOPT D+}
   {$DEFINE DEBUG}
 {$ENDIF}
@@ -115,14 +116,18 @@ type
       TItemsSequence = class
       public
         constructor Create;
+        constructor Create (AItem : TYamlFile.TOptionReader);
         destructor Destroy; override;
 
         procedure PushBack (AItemType : TYamlFile.TItemValueType);
-        procedure PushBack (AItem : TYamlFile.PItemValue);
+        procedure PushBack (AItem : TYamlFile.TOptionReader);
         function First : PItemValue;
         function FirstPop : PItemValue;
         function Last : PItemValue;
         function LastPop : PItemValue;
+
+        function Top : PItemValue;
+        function Pop : PItemValue;
       private
         type
           TItemsList = specialize TFPGList<PItemValue>;
@@ -186,6 +191,12 @@ begin
   FList := TItemsList.Create;
 end;
 
+constructor TYamlFile.TItemsSequence.Create (AItem : TYamlFile.TOptionReader);
+begin
+  FList := TItemsList.Create;
+  FList.Add(@AItem.FValue);
+end;
+
 destructor TYamlFile.TItemsSequence.Destroy;
 begin
   FreeAndNil(FList);
@@ -200,9 +211,9 @@ begin
   FList.Last^.ValueType := AItemType;
 end;
 
-procedure TYamlFile.TItemsSequence.PushBack (AItem : TYamlFile.PItemValue);
+procedure TYamlFile.TItemsSequence.PushBack (AItem : TYamlFile.TOptionReader);
 begin
-  FList.Add(AItem);
+  FList.Add(@AItem.FValue);
 end;
 
 function TYamlFile.TItemsSequence.First : PItemValue;
@@ -211,6 +222,11 @@ begin
 end;
 
 function TYamlFile.TItemsSequence.Last : PItemValue;
+begin
+  Result := FList.Last;
+end;
+
+function TYamlFile.TItemsSequence.Top : PItemValue;
 begin
   Result := FList.Last;
 end;
@@ -238,6 +254,18 @@ begin
     Result := nil;
   end;
 end;
+
+function TYamlFile.TItemsSequence.Pop : PItemValue;
+  begin
+    if FList.Count > 0 then
+    begin
+      Result := FList.Last;
+      FList.Delete(FList.Count - 1);
+    end else
+    begin
+      Result := nil;
+    end;
+  end;
 
 { TYamlFile.TResult }
 
@@ -315,8 +343,6 @@ begin
   Result := FValue.Scalar;
 end;
 
-
-
 { TYamlFile }
 
 constructor TYamlFile.Create (Encoding : TEncoding);
@@ -339,70 +365,127 @@ var
   Tokens : TItemsSequence;
   Token : yaml_token_t;
 
-  procedure ProcessTokens;
+  procedure ProcessTokens;{$IFNDEF DEBUG}inline;{$ENDIF}
   var
-    Item : PItemValue;
-    MapItemValue : PItemValue;
-    Sequence : TItemsSequence;
-  begin
-    Sequence := TItemsSequence.Create;
-    Sequence.FList.Add(@FRoot.FValue);
+    CurrentToken : PItemValue;
+    ForwardToken : PItemValue;
+    ConfigTree : TItemsSequence;
 
-    Item := Tokens.FirstPop;
-    while Item <> nil do
+    function Next(out AToken : PItemValue) : PItemValue;{$IFNDEF DEBUG}inline;
+      {$ENDIF}
     begin
-      case Item^.ValueType of
+      AToken := Tokens.FirstPop;
+      Result := AToken;
+    end;
+
+    procedure InitializeMapElement (AElement : PItemValue);{$IFNDEF DEBUG}
+      inline;{$ENDIF}
+    begin
+      AElement^.ValueType := TYPE_MAP;
+      AElement^.Map := TItemsMap.Create;
+    end;
+
+    procedure InitializeSequenceElement (AElement : PItemValue);{$IFNDEF DEBUG}
+      inline;{$ENDIF}
+    begin
+      AElement^.ValueType := TYPE_SEQUENCE;
+      AElement^.Sequence := TItemsList.Create;
+    end;
+
+    procedure CreateMapElement (ASequence : TItemsSequence);{$IFNDEF DEBUG}
+      inline;{$ENDIF}
+    begin
+      ASequence.PushBack(TYPE_MAP);
+      ASequence.Top^.Map := TItemsMap.Create;
+    end;
+
+    procedure CreateSequenceElement (ASequence : TItemsSequence);{$IFNDEF DEBUG}
+      inline;{$ENDIF}
+    begin
+      ASequence.PushBack(TYPE_SEQUENCE);
+      ASequence.Top^.Sequence := TItemsList.Create;
+    end;
+
+    function IsNone (AElement : PItemValue) : Boolean;{$IFNDEF DEBUG}inline;
+      {$ENDIF}
+    begin
+      Result := (AElement^.ValueType = TYPE_NONE);
+    end;
+
+    function IsMapValue (AElement : PItemValue) : Boolean;{$IFNDEF DEBUG}inline;
+      {$ENDIF}
+    begin
+      Result := (AElement^.ValueType = TYPE_MAP_VALUE);
+    end;
+
+    function IsSequence (AElement : PItemValue) : Boolean;{$IFNDEF DEBUG}inline;
+      {$ENDIF}
+    begin
+      Result := (AElement^.ValueType = TYPE_SEQUENCE);
+    end;
+
+    procedure CreateMapValue (AElement : PItemValue; AKey : PChar; AValue :
+      PChar);{$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      AElement^.Map[AKey] := TOptionReader.Create(TYPE_SCALAR);
+      AElement^.Map[AKey].FValue.Scalar := AValue;
+    end;
+
+    procedure CreateSequenceValue (AElement : PItemValue; AKey : PChar);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      AElement^.Map[AKey] := TOptionReader.Create(TYPE_NONE);
+    end;
+
+  begin
+    ConfigTree := TItemsSequence.Create(FRoot);
+
+    Next(CurrentToken);
+    while CurrentToken <> nil do
+    begin
+      case CurrentToken^.ValueType of
         TYPE_MAP :
           begin
-            if Sequence.Last^.ValueType = TYPE_NONE then
+            if IsNone(ConfigTree.Top) then
             begin
-              Sequence.Last^.ValueType := TYPE_MAP;
-              Sequence.Last^.Map := TItemsMap.Create;
+              InitializeMapElement(ConfigTree.Top);
             end else
             begin
-              Sequence.PushBack(TYPE_MAP);
-              Sequence.Last^.Map := TItemsMap.Create;
+              CreateMapElement(ConfigTree);
             end;
           end;
         TYPE_MAP_KEY :
           begin
-            MapItemValue := Tokens.FirstPop;
-            if (MapItemValue^.ValueType = TYPE_MAP_VALUE) and
-               (Tokens.First^.ValueType = TYPE_SEQUENCE) then
+            if IsMapValue(Next(ForwardToken)) and IsSequence(Tokens.First) then
             begin
-              Sequence.Last^.Map[Item^.Key] :=
-                TOptionReader.Create(TYPE_NONE);
-              Sequence.PushBack(@Sequence.Last^.Map[Item^.Key].FValue);
+              CreateSequenceValue(ConfigTree.Top, CurrentToken^.Key);
+              ConfigTree.PushBack(ConfigTree.Top^.Map[CurrentToken^.Key]);
             end else
             begin
-              Sequence.Last^.Map[Item^.Key] :=
-                TOptionReader.Create(TYPE_SCALAR);
-              Sequence.Last^.Map[Item^.Key].FValue.Scalar :=
-                MapItemValue^.Value;
+              CreateMapValue(ConfigTree.Top, CurrentToken^.Key,
+                ForwardToken^.Value);
             end;
           end;
         TYPE_SEQUENCE :
           begin
-            if Sequence.Last^.ValueType = TYPE_NONE then
+            if IsNone(ConfigTree.Top) then
             begin
-              Sequence.Last^.ValueType := TYPE_SEQUENCE;
-              Sequence.Last^.Sequence := TItemsList.Create;
+              InitializeSequenceElement(ConfigTree.Top);
             end else
             begin
-              Sequence.PushBack(TYPE_SEQUENCE);
-              Sequence.Last^.Sequence := TItemsList.Create;
+              CreateSequenceElement(ConfigTree);
             end;
           end;
         TYPE_SEQUENCE_ENTRY :
           begin
-            Sequence.PushBack(TYPE_NONE);
+            ConfigTree.PushBack(TYPE_NONE);
           end;
         TYPE_END_BLOCK :
           begin
-            Sequence.LastPop;
+            ConfigTree.Pop;
           end;
       end;
-      Item := Tokens.FirstPop;
+      Next(CurrentToken);
     end;
   end;
 
