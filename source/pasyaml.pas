@@ -112,6 +112,7 @@ type
           TYPE_MAP_KEY :        (Key : PChar);
           TYPE_MAP_VALUE :      (Value : PChar);
           TYPE_SEQUENCE :       (Sequence : TItemsList);
+          TYPE_SEQUENCE_ENTRY : (SequenceEntry : PChar);
           TYPE_SCALAR :         (Scalar : PChar);
       end;
 
@@ -223,6 +224,9 @@ type
 
         { Return TRUE if element is Sequence type }
         function IsSequence : Boolean;
+
+        { Return TRUE if element is Scalar type }
+        function IsScalar : Boolean;
 
         { Return element's value as String type }
         function AsString : String;
@@ -421,7 +425,13 @@ end;
 
 function TYamlFile.TOptionReader.GetValue (AKey : String) : TOptionReader;
 begin
-  Result := FValue.Map[AKey];
+  if FValue.ValueType = TYPE_MAP then
+  begin
+    Result := FValue.Map[AKey];
+  end else
+  begin
+    Result := TOptionReader.Create;
+  end;
 end;
 
 function TYamlFile.TOptionReader.IsMap : Boolean;
@@ -432,6 +442,11 @@ end;
 function TYamlFile.TOptionReader.IsSequence : Boolean;
 begin
   Result := (FValue.ValueType = TYPE_SEQUENCE);
+end;
+
+function TYamlFile.TOptionReader.IsScalar : Boolean;
+begin
+  Result := (FValue.ValueType = TYPE_SCALAR);
 end;
 
 function TYamlFile.TOptionReader.AsString : String;
@@ -473,6 +488,11 @@ var
   begin
     ASequence.BackPush(New(PItemValue));
     ASequence.Back^.ValueType := AValueType;
+
+    if AValueType = TYPE_SEQUENCE_ENTRY then
+    begin
+      ASequence.Back^.SequenceEntry := nil;
+    end;
   end;
 
   { Create new ASequence item and add it to the top }
@@ -562,6 +582,13 @@ var
       Result := (AElement^.ValueType = TYPE_NONE);
     end;
 
+    { Return TRUE if AElement type is TYPE_MAP }
+    function IsMap (AElement : PItemValue) : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      Result := (AElement^.ValueType = TYPE_MAP);
+    end;
+
     { Return TRUE if AElement type is TYPE_MAP_VALUE }
     function IsMapValue (AElement : PItemValue) : Boolean;
       {$IFNDEF DEBUG}inline;{$ENDIF}
@@ -578,11 +605,18 @@ var
 
     { Set AElement.Map[AKey] := AValue }
     procedure CreateMapValue (AElement : PItemValue; AKey : PChar; AValue :
-      PChar);
+      PChar); overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.Map[AKey] := CreateOptionReader(TYPE_SCALAR);
       AElement^.Map[AKey].FValue.Scalar := AValue;
+    end;
+
+    { Set AElement.Map[AKey] := New(Map) }
+    procedure CreateMapValue (AElement : PItemValue; AKey : PChar); overload;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      AElement^.Map[AKey] := CreateOptionReader(TYPE_NONE);
     end;
 
     { Set AElement.Map[AKey] := New(Sequence) }
@@ -593,10 +627,22 @@ var
     end;
 
     { Create new element and add it to AElement.Sequence }
-    function AddSequenceValue (AElement : PItemValue) : PItemValue;
+    function AddSequenceValue (AElement : PItemValue) : PItemValue; overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.Sequence.Add(TOptionReader.Create);
+      Result := @AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue;
+    end;
+
+    function AddSequenceValue (AElement : PItemValue; AValue : PChar) :
+      PItemValue; overload;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      AElement^.Sequence.Add(TOptionReader.Create);
+      AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue.ValueType :=
+        TYPE_SCALAR;
+      AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue.Scalar :=
+        AValue;
       Result := @AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue;
     end;
 
@@ -625,6 +671,11 @@ var
               CreateSequenceValue(ConfigTree.Top, CurrentToken^.Key);
               ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
             end else
+            if IsMapValue(ForwardToken) and IsMap(ForwardNext) then
+            begin
+              CreateMapValue(ConfigTree.Top, CurrentToken^.Key);
+              ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
+            end else
             begin
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key,
                 ForwardToken^.Value);
@@ -642,7 +693,13 @@ var
           end;
         TYPE_SEQUENCE_ENTRY :
           begin
-            ConfigTree.Push(AddSequenceValue(ConfigTree.Top));
+            if CurrentToken^.SequenceEntry <> nil then
+            begin
+              AddSequenceValue(ConfigTree.Top, CurrentToken^.SequenceEntry);
+            end else
+            begin
+              ConfigTree.Push(AddSequenceValue(ConfigTree.Top));
+            end;
           end;
         TYPE_END_BLOCK :
           begin
@@ -705,13 +762,19 @@ begin
         end;
       YAML_SCALAR_TOKEN :
         begin
-          if Tokens.Back^.ValueType = TYPE_MAP_KEY then
-          begin
-            Tokens.Back^.Key := TokenScalarValue;
-          end else
-          if Tokens.Back^.ValueType = TYPE_MAP_VALUE then
-          begin
-            Tokens.Back^.Value := TokenScalarValue;
+          case Tokens.Back^.ValueType of
+            TYPE_MAP_KEY :
+              begin
+                Tokens.Back^.Key := TokenScalarValue;
+              end;
+            TYPE_MAP_VALUE :
+              begin
+                Tokens.Back^.Value := TokenScalarValue;
+              end;
+            TYPE_SEQUENCE_ENTRY :
+              begin
+                Tokens.Back^.SequenceEntry := TokenScalarValue;
+              end;
           end;
         end;
     end;
@@ -729,7 +792,13 @@ end;
 
 function TYamlFile.GetValue (AKey : String) : TOptionReader;
 begin
-  Result := FRoot.FValue.Map[AKey];
+  if FRoot.FValue.ValueType = TYPE_MAP then
+  begin
+    Result := FRoot.FValue.Map[AKey];
+  end else
+  begin
+    Result := TOptionReader.Create;
+  end;
 end;
 
 end.
