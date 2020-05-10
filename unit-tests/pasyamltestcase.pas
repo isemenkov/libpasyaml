@@ -55,6 +55,7 @@ begin
   YamlFile.Parse(config);
   AssertTrue(YamlFile.Value['title'].AsString = 'Finex 2011');
   AssertTrue(YamlFile.Value['img_url'].AsString = '/finex/html/img');
+  AssertTrue(YamlFile.Value['pages'].IsSequence);
 
   FreeAndNil(YamlFile);
 end;

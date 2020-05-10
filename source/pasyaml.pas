@@ -118,6 +118,7 @@ type
         destructor Destroy; override;
 
         procedure PushBack (AItemType : TYamlFile.TItemValueType);
+        procedure PushBack (AItem : TYamlFile.PItemValue);
         function First : PItemValue;
         function FirstPop : PItemValue;
         function Last : PItemValue;
@@ -167,6 +168,9 @@ type
         constructor Create (AType : TYamlFile.TItemValueType);
         destructor Destroy; override;
 
+        function IsMap : Boolean;
+        function IsSequence : Boolean;
+
         function AsString : String;
       private
         FValue : TItemValue;
@@ -194,6 +198,11 @@ procedure TYamlFile.TItemsSequence.PushBack (AItemType :
 begin
   FList.Add(New(PItemValue));
   FList.Last^.ValueType := AItemType;
+end;
+
+procedure TYamlFile.TItemsSequence.PushBack (AItem : TYamlFile.PItemValue);
+begin
+  FList.Add(AItem);
 end;
 
 function TYamlFile.TItemsSequence.First : PItemValue;
@@ -291,10 +300,22 @@ begin
   inherited Destroy;
 end;
 
+function TYamlFile.TOptionReader.IsMap : Boolean;
+begin
+  Result := (FValue.ValueType = TYPE_MAP);
+end;
+
+function TYamlFile.TOptionReader.IsSequence : Boolean;
+begin
+  Result := (FValue.ValueType = TYPE_SEQUENCE);
+end;
+
 function TYamlFile.TOptionReader.AsString : String;
 begin
   Result := FValue.Scalar;
 end;
+
+
 
 { TYamlFile }
 
@@ -321,6 +342,7 @@ var
   procedure ProcessTokens;
   var
     Item : PItemValue;
+    MapItemValue : PItemValue;
     Sequence : TItemsSequence;
   begin
     Sequence := TItemsSequence.Create;
@@ -344,12 +366,19 @@ var
           end;
         TYPE_MAP_KEY :
           begin
-            if Tokens.First^.ValueType = TYPE_MAP_VALUE then
+            MapItemValue := Tokens.FirstPop;
+            if (MapItemValue^.ValueType = TYPE_MAP_VALUE) and
+               (Tokens.First^.ValueType = TYPE_SEQUENCE) then
+            begin
+              Sequence.Last^.Map[Item^.Key] :=
+                TOptionReader.Create(TYPE_NONE);
+              Sequence.PushBack(@Sequence.Last^.Map[Item^.Key].FValue);
+            end else
             begin
               Sequence.Last^.Map[Item^.Key] :=
                 TOptionReader.Create(TYPE_SCALAR);
               Sequence.Last^.Map[Item^.Key].FValue.Scalar :=
-                Tokens.FirstPop^.Value;
+                MapItemValue^.Value;
             end;
           end;
         TYPE_SEQUENCE :
