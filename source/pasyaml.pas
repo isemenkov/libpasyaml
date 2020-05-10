@@ -34,7 +34,6 @@
 unit pasyaml;
 
 {$mode objfpc}{$H+}
-{$modeswitch typehelpers}
 {$IFOPT D+}
   {$DEFINE DEBUG}
 {$ENDIF}
@@ -78,16 +77,18 @@ type
     constructor Create (Encoding : TEncoding = ENCODING_UTF8);
     destructor Destroy; override;
 
-    { Parse configuration from string }
+    { Parse YAML configuration from string }
     function Parse (ConfigString : String) : TVoidResult; {$IFNDEF DEBUG}inline;
       {$ENDIF}
 
+    { Return option value by path }
     property Value [AKey : String] : TOptionReader read GetValue;
   private
     const
       ERROR_OK                                                      =  1;
 
     type
+      { Config document elements types }
       TItemValueType = (
         TYPE_NONE,
         TYPE_MAP,
@@ -103,6 +104,7 @@ type
       TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
       TItemsList = class(specialize TFPGList<TOptionReader>);
 
+      { Config document element }
       TItemValue = record
         ValueType : TYamlFile.TItemValueType;
         case Byte of
@@ -113,25 +115,44 @@ type
           TYPE_SCALAR :         (Scalar : PChar);
       end;
 
+      { Bidirectional list and stack class }
       TItemsSequence = class
       public
         constructor Create;
-        constructor Create (AItem : TYamlFile.TOptionReader);
         destructor Destroy; override;
 
-        procedure PushBack (AItemType : TYamlFile.TItemValueType);
-        procedure PushBack (AItem : TYamlFile.TOptionReader);
-        function First : PItemValue;
-        function FirstPop : PItemValue;
-        function Last : PItemValue;
-        function LastPop : PItemValue;
+        { Get front element value }
+        function  Front : PItemValue;
 
-        function Top : PItemValue;
-        function Pop : PItemValue;
+        { Add new element to front }
+        procedure FrontPush (AItem : PItemValue);
+        procedure FrontPush (AItem : TYamlFile.TOptionReader);
+
+        { Take element from front side }
+        function  FrontPop : PItemValue;
+
+        { Get back element value }
+        function  Back : PItemValue;
+
+        { Add new element to back }
+        procedure BackPush (AItem : PItemValue);
+        procedure BackPush (AItem : TYamlFile.TOptionReader);
+
+        { Take element from back side }
+        function  BackPop : PItemValue;
+
+        { Add element to stack }
+        procedure Push (AItem : PItemValue);
+        procedure Push (AItem : TYamlFile.TOptionReader);
+
+        { Get stack's top element value }
+        function  Top : PItemValue;
+
+        { Take element from stack }
+        function  Pop : PItemValue;
       private
         type
           TItemsList = specialize TFPGList<PItemValue>;
-
         var
           FList : TItemsList;
       end;
@@ -141,7 +162,7 @@ type
       FRoot : TOptionReader;
   public
     type
-      { Result structure which stored value and error type if exists like GO
+      { Result structure which stored value and error type if exists like in GO
       lang }
       generic TResult<VALUE_TYPE, ERROR_TYPE> = class
       protected
@@ -168,15 +189,50 @@ type
         property Value;
       end;
 
+      { Reader for configuration option }
       TOptionReader = class
       public
-        constructor Create (AType : TYamlFile.TItemValueType);
+        type
+          { Sequence type enumerator }
+          TSequenceEnumerator = class
+          protected
+            FOption : PItemValue;
+            FCount : Integer;
+            FPosition : Cardinal;
+
+            function GetCurrent : TOptionReader;
+              {$IFNDEF DEBUG}inline;{$ENDIF}
+          public
+            constructor Create (AOption : PItemValue);
+            function MoveNext : Boolean;
+              {$IFNDEF DEBUG}inline;{$ENDIF}
+            function GetEnumerator : TSequenceEnumerator;
+              {$IFNDEF DEBUG}inline;{$ENDIF}
+            property Current : TOptionReader read GetCurrent;
+          end;
+      protected
+        function GetValue (AKey : String) : TOptionReader;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
+      public
+        constructor Create;
+        constructor Create (AValue : PItemValue);
         destructor Destroy; override;
 
+        { Return TRUE if element is Map type }
         function IsMap : Boolean;
+
+        { Return TRUE if element is Sequence type }
         function IsSequence : Boolean;
 
+        { Return element's value as String type }
         function AsString : String;
+
+        { Return element's value as Sequence enumerator }
+        function AsSequence : TSequenceEnumerator;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
+
+        { Return option value by path }
+        property Value [AKey : String] : TOptionReader read GetValue;
       private
         FValue : TItemValue;
       end;
@@ -191,12 +247,6 @@ begin
   FList := TItemsList.Create;
 end;
 
-constructor TYamlFile.TItemsSequence.Create (AItem : TYamlFile.TOptionReader);
-begin
-  FList := TItemsList.Create;
-  FList.Add(@AItem.FValue);
-end;
-
 destructor TYamlFile.TItemsSequence.Destroy;
 begin
   FreeAndNil(FList);
@@ -204,34 +254,22 @@ begin
   inherited Destroy;
 end;
 
-procedure TYamlFile.TItemsSequence.PushBack (AItemType :
-  TYamlFile.TItemValueType);
-begin
-  FList.Add(New(PItemValue));
-  FList.Last^.ValueType := AItemType;
-end;
-
-procedure TYamlFile.TItemsSequence.PushBack (AItem : TYamlFile.TOptionReader);
-begin
-  FList.Add(@AItem.FValue);
-end;
-
-function TYamlFile.TItemsSequence.First : PItemValue;
+function TYamlFile.TItemsSequence.Front : PItemValue;
 begin
   Result := FList.First;
 end;
 
-function TYamlFile.TItemsSequence.Last : PItemValue;
+procedure TYamlFile.TItemsSequence.FrontPush (AItem : PItemValue);
 begin
-  Result := FList.Last;
+  FList.Insert(0, AItem);
 end;
 
-function TYamlFile.TItemsSequence.Top : PItemValue;
+procedure TYamlFile.TItemsSequence.FrontPush (AItem : TYamlFile.TOptionReader);
 begin
-  Result := FList.Last;
+  FrontPush(@AItem.FValue);
 end;
 
-function TYamlFile.TItemsSequence.FirstPop : PItemValue;
+function TYamlFile.TItemsSequence.FrontPop : PItemValue;
 begin
   if FList.Count > 0 then
   begin
@@ -243,7 +281,22 @@ begin
   end;
 end;
 
-function TYamlFile.TItemsSequence.LastPop : PItemValue;
+function TYamlFile.TItemsSequence.Back : PItemValue;
+begin
+  Result := FList.Last;
+end;
+
+procedure TYamlFile.TItemsSequence.BackPush (AItem : PItemValue);
+begin
+  FList.Add(AItem);
+end;
+
+procedure TYamlFile.TItemsSequence.BackPush (AItem : TYamlFile.TOptionReader);
+begin
+  BackPush(@AItem.FValue);
+end;
+
+function TYamlFile.TItemsSequence.BackPop : PItemValue;
 begin
   if FList.Count > 0 then
   begin
@@ -255,17 +308,25 @@ begin
   end;
 end;
 
+procedure TYamlFile.TItemsSequence.Push (AItem : PItemValue);
+begin
+  BackPush(AItem);
+end;
+
+procedure TYamlFile.TItemsSequence.Push (AItem : TYamlFile.TOptionReader);
+begin
+  BackPush(AItem);
+end;
+
+function TYamlFile.TItemsSequence.Top : PItemValue;
+begin
+  Result := Back;
+end;
+
 function TYamlFile.TItemsSequence.Pop : PItemValue;
-  begin
-    if FList.Count > 0 then
-    begin
-      Result := FList.Last;
-      FList.Delete(FList.Count - 1);
-    end else
-    begin
-      Result := nil;
-    end;
-  end;
+begin
+  Result := BackPop;
+end;
 
 { TYamlFile.TResult }
 
@@ -294,22 +355,52 @@ begin
   inherited Create (nil, AError, AOk);
 end;
 
+{ TYamlFile.TOptionReader.TSequenceEnumerator }
+
+constructor TYamlFile.TOptionReader.TSequenceEnumerator.Create (AOption :
+  PItemValue);
+begin
+  FOption := AOption;
+  FPosition := 0;
+  if (FOption = nil) or (AOption^.ValueType <> TYPE_SEQUENCE) then
+    FCount := 0
+  else
+    FCount := FOption^.Sequence.Count;
+end;
+
+function TYamlFile.TOptionReader.TSequenceEnumerator.GetCurrent : TOptionReader;
+begin
+  if FOption = nil then
+  begin
+    Result := TOptionReader.Create(FOption);
+    Exit;
+  end;
+
+  Result := TOptionReader.Create(@FOption^.Sequence.Items[FPosition].FValue);
+  Inc(FPosition);
+end;
+
+function TYamlFile.TOptionReader.TSequenceEnumerator.MoveNext : Boolean;
+begin
+  Result := FPosition < FCount;
+end;
+
+function TYamlFile.TOptionReader.TSequenceEnumerator.GetEnumerator :
+  TYamlFile.TOptionReader.TSequenceEnumerator;
+begin
+  Result := Self;
+end;
+
 { TYamlFile.TOptionReader }
 
-constructor TYamlFile.TOptionReader.Create (AType : TYamlFile.TItemValueType);
+constructor TYamlFile.TOptionReader.Create;
 begin
-  FValue.ValueType := AType;
+  FValue.ValueType := TYPE_NONE;
+end;
 
-  case AType of
-    TYPE_MAP :
-      begin
-        FValue.Map := TItemsMap.Create;
-      end;
-    TYPE_SEQUENCE :
-      begin
-        FValue.Sequence := TItemsList.Create;
-      end;
-  end;
+constructor TYamlFile.TOptionReader.Create (AValue : PItemValue);
+begin
+  FValue := AValue^;
 end;
 
 destructor TYamlFile.TOptionReader.Destroy;
@@ -328,6 +419,11 @@ begin
   inherited Destroy;
 end;
 
+function TYamlFile.TOptionReader.GetValue (AKey : String) : TOptionReader;
+begin
+  Result := FValue.Map[AKey];
+end;
+
 function TYamlFile.TOptionReader.IsMap : Boolean;
 begin
   Result := (FValue.ValueType = TYPE_MAP);
@@ -343,11 +439,16 @@ begin
   Result := FValue.Scalar;
 end;
 
+function TYamlFile.TOptionReader.AsSequence : TSequenceEnumerator;
+begin
+  Result := TSequenceEnumerator.Create(@FValue);
+end;
+
 { TYamlFile }
 
 constructor TYamlFile.Create (Encoding : TEncoding);
 begin
-  FRoot := TOptionReader.Create(TYPE_NONE);
+  FRoot := TOptionReader.Create;
 
   if yaml_parser_initialize(@FParser) <> ERROR_OK then
     ;
@@ -365,80 +466,143 @@ var
   Tokens : TItemsSequence;
   Token : yaml_token_t;
 
-  procedure ProcessTokens;{$IFNDEF DEBUG}inline;{$ENDIF}
+  { Create new ASequence item and add it to the back side }
+  procedure CreateValueAndBackPush (var ASequence : TItemsSequence; AValueType :
+    TItemValueType);
+    {$IFNDEF DEBUG}inline;{$ENDIF}
+  begin
+    ASequence.BackPush(New(PItemValue));
+    ASequence.Back^.ValueType := AValueType;
+  end;
+
+  { Create new ASequence item and add it to the top }
+  procedure CreateValueAndTopPush (var ASequence : TItemsSequence; AValueType :
+    TItemValueType);
+    {$IFNDEF DEBUG}inline;{$ENDIF}
+  begin
+    ASequence.Push(New(PItemValue));
+    ASequence.Top^.ValueType := AValueType;
+  end;
+
+  { Process YAML tokens and create document structure }
+  procedure ProcessTokens;
+    {$IFNDEF DEBUG}inline;{$ENDIF}
   var
     CurrentToken : PItemValue;
     ForwardToken : PItemValue;
     ConfigTree : TItemsSequence;
 
-    function Next(out AToken : PItemValue) : PItemValue;{$IFNDEF DEBUG}inline;
-      {$ENDIF}
+    { Set next token from Tokens variable sequence to AToken item and also r
+      eturn it. Remove token from sequence at end }
+    function Next(out AToken : PItemValue) : PItemValue;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AToken := Tokens.FirstPop;
+      AToken := Tokens.FrontPop;
       Result := AToken;
     end;
 
-    procedure InitializeMapElement (AElement : PItemValue);{$IFNDEF DEBUG}
-      inline;{$ENDIF}
+    { Return next token from Token variable sequence only }
+    function ForwardNext : PItemValue;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      Result := Tokens.Front;
+    end;
+
+    { Initialize AElement.Map field }
+    procedure InitializeMapElement (AElement : PItemValue);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.ValueType := TYPE_MAP;
       AElement^.Map := TItemsMap.Create;
     end;
 
-    procedure InitializeSequenceElement (AElement : PItemValue);{$IFNDEF DEBUG}
-      inline;{$ENDIF}
+    { Initialize AElement.Sequence field }
+    procedure InitializeSequenceElement (AElement : PItemValue);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.ValueType := TYPE_SEQUENCE;
       AElement^.Sequence := TItemsList.Create;
     end;
 
-    procedure CreateMapElement (ASequence : TItemsSequence);{$IFNDEF DEBUG}
-      inline;{$ENDIF}
+    { Create new ASequence element, push it and initialize }
+    procedure CreateMapElement (ASequence : TItemsSequence);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      ASequence.PushBack(TYPE_MAP);
+      ASequence.Push(New(PItemValue));
+      ASequence.Top^.ValueType := TYPE_MAP;
       ASequence.Top^.Map := TItemsMap.Create;
     end;
 
-    procedure CreateSequenceElement (ASequence : TItemsSequence);{$IFNDEF DEBUG}
-      inline;{$ENDIF}
+    { Create new ASequence element, push it and initialize }
+    procedure CreateSequenceElement (ASequence : TItemsSequence);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      ASequence.PushBack(TYPE_SEQUENCE);
+      ASequence.Push(New(PItemValue));
+      ASequence.Top^.ValueType := TYPE_SEQUENCE;
       ASequence.Top^.Sequence := TItemsList.Create;
     end;
 
-    function IsNone (AElement : PItemValue) : Boolean;{$IFNDEF DEBUG}inline;
-      {$ENDIF}
+    { Create new TOptionReader element }
+    function CreateOptionReader (AValueType : TItemValueType) : TOptionReader;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      Result := TOptionReader.Create;
+      Result.FValue.ValueType := AValueType;
+
+      case AValueType of
+        TYPE_MAP      : InitializeMapElement(@Result.FValue);
+        TYPE_SEQUENCE : InitializeSequenceElement(@Result.FValue);
+      end;
+    end;
+
+    { Return TRUE if AElement type is TYPE_NONE }
+    function IsNone (AElement : PItemValue) : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       Result := (AElement^.ValueType = TYPE_NONE);
     end;
 
-    function IsMapValue (AElement : PItemValue) : Boolean;{$IFNDEF DEBUG}inline;
-      {$ENDIF}
+    { Return TRUE if AElement type is TYPE_MAP_VALUE }
+    function IsMapValue (AElement : PItemValue) : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       Result := (AElement^.ValueType = TYPE_MAP_VALUE);
     end;
 
-    function IsSequence (AElement : PItemValue) : Boolean;{$IFNDEF DEBUG}inline;
-      {$ENDIF}
+    { Return TRUE if AElement type is TYPE_SEQUENCE }
+    function IsSequence (AElement : PItemValue) : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       Result := (AElement^.ValueType = TYPE_SEQUENCE);
     end;
 
+    { Set AElement.Map[AKey] := AValue }
     procedure CreateMapValue (AElement : PItemValue; AKey : PChar; AValue :
-      PChar);{$IFNDEF DEBUG}inline;{$ENDIF}
+      PChar);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Map[AKey] := TOptionReader.Create(TYPE_SCALAR);
+      AElement^.Map[AKey] := CreateOptionReader(TYPE_SCALAR);
       AElement^.Map[AKey].FValue.Scalar := AValue;
     end;
 
+    { Set AElement.Map[AKey] := New(Sequence) }
     procedure CreateSequenceValue (AElement : PItemValue; AKey : PChar);
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Map[AKey] := TOptionReader.Create(TYPE_NONE);
+      AElement^.Map[AKey] := CreateOptionReader(TYPE_NONE);
+    end;
+
+    { Create new element and add it to AElement.Sequence }
+    function AddSequenceValue (AElement : PItemValue) : PItemValue;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      AElement^.Sequence.Add(TOptionReader.Create);
+      Result := @AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue;
     end;
 
   begin
-    ConfigTree := TItemsSequence.Create(FRoot);
+    ConfigTree := TItemsSequence.Create;
+    ConfigTree.Push(FRoot);
 
     Next(CurrentToken);
     while CurrentToken <> nil do
@@ -456,10 +620,10 @@ var
           end;
         TYPE_MAP_KEY :
           begin
-            if IsMapValue(Next(ForwardToken)) and IsSequence(Tokens.First) then
+            if IsMapValue(Next(ForwardToken)) and IsSequence(ForwardNext) then
             begin
               CreateSequenceValue(ConfigTree.Top, CurrentToken^.Key);
-              ConfigTree.PushBack(ConfigTree.Top^.Map[CurrentToken^.Key]);
+              ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
             end else
             begin
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key,
@@ -478,7 +642,7 @@ var
           end;
         TYPE_SEQUENCE_ENTRY :
           begin
-            ConfigTree.PushBack(TYPE_NONE);
+            ConfigTree.Push(AddSequenceValue(ConfigTree.Top));
           end;
         TYPE_END_BLOCK :
           begin
@@ -487,6 +651,14 @@ var
       end;
       Next(CurrentToken);
     end;
+  end;
+
+  { Return Token variable scalar value }
+  function TokenScalarValue : PChar;
+    {$IFNDEF DEBUG}inline;{$ENDIF}
+  begin
+    Result := StrCopy(StrAlloc(StrLen(PChar(Token.token.scalar.value)) + 1),
+      PChar(Token.token.scalar.value));
   end;
 
 begin
@@ -509,41 +681,37 @@ begin
         end;
       YAML_KEY_TOKEN :
         begin
-          Tokens.PushBack(TYPE_MAP_KEY);
+          CreateValueAndBackPush(Tokens, TYPE_MAP_KEY);
         end;
       YAML_VALUE_TOKEN :
         begin
-          Tokens.PushBack(TYPE_MAP_VALUE);
+          CreateValueAndBackPush(Tokens, TYPE_MAP_VALUE);
         end;
       YAML_BLOCK_SEQUENCE_START_TOKEN :
         begin
-          Tokens.PushBack(TYPE_SEQUENCE);
+          CreateValueAndBackPush(Tokens, TYPE_SEQUENCE);
         end;
       YAML_BLOCK_ENTRY_TOKEN :
         begin
-          Tokens.PushBack(TYPE_SEQUENCE_ENTRY);
+          CreateValueAndBackPush(Tokens, TYPE_SEQUENCE_ENTRY);
         end;
       YAML_BLOCK_END_TOKEN :
         begin
-          Tokens.PushBack(TYPE_END_BLOCK);
+          CreateValueAndBackPush(Tokens, TYPE_END_BLOCK);
         end;
       YAML_BLOCK_MAPPING_START_TOKEN :
         begin
-          Tokens.PushBack(TYPE_MAP);
+          CreateValueAndBackPush(Tokens, TYPE_MAP);
         end;
       YAML_SCALAR_TOKEN :
         begin
-          if Tokens.Last^.ValueType = TYPE_MAP_KEY then
+          if Tokens.Back^.ValueType = TYPE_MAP_KEY then
           begin
-            Tokens.Last^.Key :=
-              StrCopy(StrAlloc(StrLen(PChar(Token.token.scalar.value)) + 1),
-                PChar(Token.token.scalar.value));
+            Tokens.Back^.Key := TokenScalarValue;
           end else
-          if Tokens.Last^.ValueType = TYPE_MAP_VALUE then
+          if Tokens.Back^.ValueType = TYPE_MAP_VALUE then
           begin
-            Tokens.Last^.Value :=
-              StrCopy(StrAlloc(StrLen(PChar(Token.token.scalar.value)) + 1),
-                PChar(Token.token.scalar.value));
+            Tokens.Back^.Value := TokenScalarValue;
           end;
         end;
     end;

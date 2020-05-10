@@ -51,12 +51,20 @@ const
                     'img_url   : /finex/html/img';
 var
   YamlFile : TYamlFile;
+  Seq : TYamlFile.TOptionReader;
 begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
+
   AssertTrue(YamlFile.Value['title'].AsString = 'Finex 2011');
   AssertTrue(YamlFile.Value['img_url'].AsString = '/finex/html/img');
   AssertTrue(YamlFile.Value['pages'].IsSequence);
+
+  for Seq in YamlFile.Value['pages'].AsSequence do
+  begin
+    AssertTrue(Seq.Value['act'].AsString = 'idx');
+    AssertTrue(Seq.Value['title'].AsString = 'welcome');
+  end;
 
   FreeAndNil(YamlFile);
 end;
