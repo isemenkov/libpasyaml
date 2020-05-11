@@ -5,7 +5,7 @@ unit pasyamltestcase;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry, pasyaml;
+  Classes, SysUtils, fpcunit, testregistry, pasyaml, dateutils;
 
 type
 
@@ -18,6 +18,7 @@ type
     procedure TestSequenceAndMapParse;
     procedure TestMultipleMapParse;
     procedure TestMultipleSequenceParse;
+    procedure TestTypesParse;
   end;
 
 implementation
@@ -26,10 +27,11 @@ implementation
 
 procedure TYamlTestCase.TestMapParse;
 const
-  config : string = 'title   : Finex 2011'                        + sLineBreak +
-                    'img_url : /finex/html/img'                   + sLineBreak +
-                    'css_url : /finex/html/style'                 + sLineBreak +
-                    'js_url  : /finex/html/js';
+  config : string = ''                                            +
+    'title   : Finex 2011'                                        + sLineBreak +
+    'img_url : /finex/html/img'                                   + sLineBreak +
+    'css_url : /finex/html/style'                                 + sLineBreak +
+    'js_url  : /finex/html/js';
 var
   YamlFile : TYamlFile;
 begin
@@ -46,11 +48,12 @@ end;
 
 procedure TYamlTestCase.TestSequenceItemMapParse;
 const
-  config : string = 'title     : Finex 2011'                      + sLineBreak +
-                    'pages:'                                      + sLineBreak +
-                    '  - act   : idx'                             + sLineBreak +
-                    '    title : welcome'                         + sLineBreak +
-                    'img_url   : /finex/html/img';
+  config : string = ''                                            +
+    'title     : Finex 2011'                                      + sLineBreak +
+    'pages:'                                                      + sLineBreak +
+    '  - act   : idx'                                             + sLineBreak +
+    '    title : welcome'                                         + sLineBreak +
+    'img_url   : /finex/html/img';
 var
   YamlFile : TYamlFile;
   Seq : TYamlFile.TOptionReader;
@@ -148,7 +151,7 @@ end;
 
 procedure TYamlTestCase.TestMultipleMapParse;
 const
-  config : string = ''                                            + sLineBreak +
+  config : string = ''                                            +
     'nodes:'                                                      + sLineBreak +
     '  - name: controller'                                        + sLineBreak +
     '    description: Cloud controller node'                      + sLineBreak +
@@ -210,7 +213,7 @@ end;
 
 procedure TYamlTestCase.TestMultipleSequenceParse;
 const
-  config : string = ''                                            + sLineBreak +
+  config : string = ''                                            +
     '# =========================================================' + sLineBreak +
     '# Node Information'                                          + sLineBreak +
     '# =========================================================' + sLineBreak +
@@ -284,6 +287,65 @@ begin
     InnerIndex := 0;
   end;
   AssertTrue(Index = 2);
+
+  FreeAndNil(YamlFile);
+end;
+
+procedure TYamlTestCase.TestTypesParse;
+const
+  config : string = ''                                            +
+    'person:'                                                     + sLineBreak +
+    '  name: &val "mike"'                                         + sLineBreak +
+    '  occupation: ''programmer'' '                               + sLineBreak +
+    '  age: 23'                                                   + sLineBreak +
+    '  gpa: 3.5'                                                  + sLineBreak +
+    '  fav_num: 1e+10'                                            + sLineBreak +
+    '  male: true'                                                + sLineBreak +
+    '  birthday: 1994-02-06 14:33:22'                             + sLineBreak +
+    '  flaws: null'                                               + sLineBreak +
+    '  hobbies:'                                                  + sLineBreak +
+    '    - hiking'                                                + sLineBreak +
+    '    - movies'                                                + sLineBreak +
+    '    - riding bike'                                           + sLineBreak +
+    '  movies: ["Dark Knight", "Good Will Hunting"]'              + sLineBreak +
+    '  friends:'                                                  + sLineBreak +
+    '    - name: "Steph"'                                         + sLineBreak +
+    '      age: 22'                                               + sLineBreak +
+    '    - {name: "Adam", age: 22}'                               + sLineBreak +
+    '    - '                                                      + sLineBreak +
+    '      name: "Joe"'                                           + sLineBreak +
+    '      age: 23'                                               + sLineBreak +
+    '  description: >'                                            + sLineBreak +
+    '    Nulla consequat massa quis enim.'                        + sLineBreak +
+    '    Donec pede justo, fringilla vel,'                        + sLineBreak +
+    '    aliquet nec, vulputate eget, arcu.'                      + sLineBreak +
+    '    In enim justo, rhoncus ut, imperdiet'                    + sLineBreak +
+    '    a, venenatis vitae, justo'                               + sLineBreak +
+    '  signature: |'                                              + sLineBreak +
+    '    Mike'                                                    + sLineBreak +
+    '    Girafee Academy'                                         + sLineBreak +
+    '    email - mike@gmail.com'                                  + sLineBreak +
+    '  id: *val';
+
+var
+  YamlFile : TYamlFile;
+begin
+  YamlFile := TYamlFile.Create;
+  YamlFile.Parse(config);
+
+  AssertTrue(YamlFile.Value['person'].IsMap);
+  with YamlFile.Value['person'] do
+  begin
+    AssertTrue(Value['name'].AsString = 'mike');
+    AssertTrue(Value['occupation'].AsString = 'programmer');
+    AssertTrue(Value['age'].AsInteger = 23);
+    AssertTrue(Value['gpa'].AsFloat = 3.5);
+    AssertTrue(Value['fav_num'].AsFloat = 1e+10);
+    AssertTrue(Value['birthday'].AsDateTime = EncodeDateTime(1994, 2, 6, 14, 33,
+      22, 0));
+
+    AssertTrue(Value['id'].AsString = 'mike');
+  end;
 
   FreeAndNil(YamlFile);
 end;
