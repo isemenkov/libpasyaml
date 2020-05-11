@@ -50,6 +50,14 @@ type
   generic TYamlResult<VALUE_TYPE, ERROR_TYPE> = class
   protected
     type
+      TErrorType = (
+        IMPOSSIBLE_VALUE,
+        IMPOSSIBLE_ERROR
+      );
+
+      { OnError event callback }
+      TOnErrorEvent = procedure (AErrorType : TErrorType) of object;
+
       PVALUE_TYPE = ^VALUE_TYPE;
       PERROR_TYPE = ^ERROR_TYPE;
 
@@ -61,6 +69,7 @@ type
       end;
   protected
     FValue : TValue;
+    FOnError : TOnErrorEvent;
 
     function _Ok : Boolean;
       {$IFNDEF DEBUG}inline;{$ENDIF}
@@ -82,6 +91,9 @@ type
 
     { Get error if exists or EYamlResultException }
     property Error : ERROR_TYPE read _Error;
+
+    { OnError event callback }
+    property OnError : TOnErrorEvent read FOnError write FOnError;
   end;
 
   { Void result, only error code is available }
@@ -135,7 +147,10 @@ begin
     Result := FValue.Value^;
   end else
   begin
-    raise EYamlResultException.Create('Impossible value');
+    if Assigned(FOnError) then
+      FOnError(IMPOSSIBLE_VALUE)
+    else
+      raise EYamlResultException.Create('Impossible value');
   end;
 end;
 
@@ -146,7 +161,10 @@ begin
     Result := FValue.Error^;
   end else
   begin
-    raise EYamlResultException.Create('Impossible error');
+    if Assigned(FOnError) then
+      FOnError(IMPOSSIBLE_ERROR)
+    else
+      raise EYamlResultException.Create('Impossible error');
   end;
 end;
 

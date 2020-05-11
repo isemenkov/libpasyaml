@@ -203,30 +203,39 @@ type
 
         { Return TRUE if element is Map type }
         function IsMap : Boolean;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return TRUE if element is Sequence type }
         function IsSequence : Boolean;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return TRUE if element is Scalar type }
         function IsScalar : Boolean;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as String type }
         function AsString : String;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as Integer type }
         function AsInteger : Integer;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as Float type }
         function AsFloat : Double;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as TDate type }
         function AsDate : TDate;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as TTime type }
         function AsTime : TTime;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as TDateTime type }
         function AsDateTime : TDateTime;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Return element's value as Sequence enumerator }
         function AsSequence : TSequenceEnumerator;
@@ -490,6 +499,9 @@ begin
 end;
 
 function TYamlFile.Parse(ConfigString : String) : TVoidResult;
+const
+  {%H-}PREVIOUS_TOKEN_POSITION                                           = 0;
+  THROUGH_TWO_TOKENS_POSITION                                            = 1;
 var
   Tokens : TItemsSequence;
   Token : yaml_token_t;
@@ -534,8 +546,8 @@ var
     ConfigTree : TItemsSequence;
     AliasesMap : TItemsMap;
 
-    { Set next token from Tokens variable sequence to AToken item and also r
-      eturn it. Remove token from sequence at end }
+    { Set next token from Tokens variable sequence to AToken item and also
+      return it. Remove token from sequence at end }
     function Next(out AToken : PItemValue) : PItemValue;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
@@ -670,8 +682,8 @@ var
       AliasesMap[AKey].FValue.Scalar := AValue;
     end;
 
-    { Return Alias[Key] }
-    function GetAlias (AKey : PChar) : PChar;
+    { Return Alias[Key] value }
+    function GetAliasValue (AKey : PChar) : PChar;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       Result := AliasesMap[AKey].FValue.Scalar;
@@ -699,6 +711,13 @@ var
       Result := @AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue;
     end;
 
+    { Return TRUE if AElement sequence entry contains value }
+    function IsSequenceEntryHasValue (AElement : PItemValue) : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+    begin
+      Result := (AElement^.SequenceEntry <> nil);
+    end;
+
   begin
     AliasesMap := TItemsMap.Create;
     ConfigTree := TItemsSequence.Create;
@@ -724,25 +743,40 @@ var
           end;
         TYPE_MAP_KEY :
           begin
+            { CurrentToken  ->   NextToken   ->   NextToken
+                   ^                ^                 ^
+              TYPE_MAP_KEY    TYPE_MAP_VALUE    TYPE_SEQUENCE }
             if IsMapValue(Next(ForwardToken)) and IsSequence(ForwardNext) then
             begin
               CreateSequenceValue(ConfigTree.Top, CurrentToken^.Key);
               ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
             end else
+            { CurrentToken  ->   NextToken   ->   NextToken
+                   ^                ^                 ^
+              TYPE_MAP_KEY    TYPE_MAP_VALUE       TYPE_MAP }
             if IsMapValue(ForwardToken) and IsMap(ForwardNext) then
             begin
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key);
               ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
             end else
+            { CurrentToken  ->   NextToken   ->   NextToken
+                   ^                ^                 ^
+              TYPE_MAP_KEY    TYPE_MAP_VALUE      TYPE_ALIAS }
             if IsMapValue(ForwardToken) and IsAlias(ForwardNext) then
             begin
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key,
-                GetAlias(Next(ForwardToken)^.AliasName));
+                GetAliasValue(Next(ForwardToken)^.AliasName));
             end else
             begin
+              { CurrentToken  ->   NextToken
+                     ^                ^
+                TYPE_MAP_KEY    TYPE_MAP_VALUE }
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key,
                 ForwardToken^.Value);
 
+              { CurrentToken  ->   NextToken   ->   NextToken
+                     ^                ^                 ^
+                TYPE_MAP_KEY    TYPE_MAP_VALUE    TYPE_ANCHOR }
               if IsAnchor(ForwardNext) then
               begin
                 CreateAnchorValue(ForwardNext^.Anchor, ForwardToken^.Value);
@@ -762,13 +796,14 @@ var
           end;
         TYPE_SEQUENCE_ENTRY :
           begin
-            if CurrentToken^.SequenceEntry <> nil then
+            if IsSequenceEntryHasValue(CurrentToken) then
             begin
               AddSequenceValue(ConfigTree.Top, CurrentToken^.SequenceEntry);
             end else
             if IsAlias(ForwardNext) then
             begin
-              AddSequenceValue(ConfigTree.Top, Next(ForwardToken)^.AliasName);
+              AddSequenceValue(ConfigTree.Top,
+                GetAliasValue(Next(ForwardToken)^.AliasName));
             end else
             begin
               ConfigTree.Push(AddSequenceValue(ConfigTree.Top));
@@ -905,20 +940,27 @@ begin
               end;
             TYPE_ANCHOR :
               begin
-                case Tokens.Back(1)^.ValueType of
+                { We need back for two elements from current token position.
+                  Current token now not in the queue so we back for another one
+                  element and get the second one from end. }
+                case Tokens.Back(THROUGH_TWO_TOKENS_POSITION)^.ValueType of
                   TYPE_MAP_VALUE :
                     begin
-                      Tokens.Back(1)^.Key := TokenScalarValue;
+                      Tokens.Back(THROUGH_TWO_TOKENS_POSITION)^.Key :=
+                        TokenScalarValue;
                     end;
                   TYPE_SEQUENCE_ENTRY :
                     begin
-                      Tokens.Back(1)^.SequenceEntry := TokenScalarValue;
+                      Tokens.Back(THROUGH_TWO_TOKENS_POSITION)^.SequenceEntry :=
+                        TokenScalarValue;
                     end;
                 end;
               end;
             TYPE_ALIAS :
               begin
-                Tokens.Back(1)^.AliasName := TokenAliasValue;
+                { See TYPE_ANCHOR comment }
+                Tokens.Back(THROUGH_TWO_TOKENS_POSITION)^.AliasName :=
+                  TokenAliasValue;
               end;
           end;
         end;
@@ -929,9 +971,8 @@ begin
 
   until Token.token_type = YAML_STREAM_END_TOKEN;
 
-
-  FreeAndNil(Tokens);
   yaml_token_delete(@Token);
+  FreeAndNil(Tokens);
   Result := TVoidResult.Create(ERROR_NONE, True);
 end;
 

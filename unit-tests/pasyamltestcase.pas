@@ -329,6 +329,8 @@ const
 
 var
   YamlFile : TYamlFile;
+  Seq : TYamlFile.TOptionReader;
+  Index : Integer = 0;
 begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
@@ -344,6 +346,68 @@ begin
     AssertTrue(Value['birthday'].AsDateTime = EncodeDateTime(1994, 2, 6, 14, 33,
       22, 0));
 
+    AssertTrue(Value['hobbies'].IsSequence);
+    for Seq in Value['hobbies'].AsSequence do
+    begin
+      case Index of
+        0 : begin
+          AssertTrue(Seq.AsString = 'hiking');
+        end;
+        1 : begin
+          AssertTrue(Seq.AsString = 'movies');
+        end;
+        2 : begin
+          AssertTrue(Seq.AsString = 'riding bike');
+        end;
+      end;
+      Inc(Index);
+    end;
+    AssertTrue(Index = 3);
+
+    Index := 0;
+    AssertTrue(Value['movies'].IsSequence);
+    for Seq in Value['movies'].AsSequence do
+    begin
+      case Index of
+        0 : begin
+          AssertTrue(Seq.AsString = 'Dark Knight');
+        end;
+        1 : begin
+          AssertTrue(Seq.AsString = 'Good Will Hunting');
+        end;
+      end;
+      Inc(Index);
+    end;
+    AssertTrue(Index = 2);
+
+    Index := 0;
+    AssertTrue(Value['friends'].IsSequence);
+    for Seq in Value['friends'].AsSequence do
+    begin
+      case Index of
+        0 : begin
+          AssertTrue(Seq.Value['name'].AsString = 'Steph');
+          AssertTrue(Seq.Value['age'].AsInteger = 22);
+        end;
+        1 : begin
+          AssertTrue(Seq.Value['name'].AsString = 'Adam');
+          AssertTrue(Seq.Value['age'].AsInteger = 22);
+        end;
+        2 : begin
+          AssertTrue(Seq.Value['name'].AsString = 'Joe');
+          AssertTrue(Seq.Value['age'].AsInteger = 23);
+        end;
+      end;
+      Inc(Index);
+    end;
+    AssertTrue(Index = 3);
+
+    AssertTrue(Value['description'].AsString = 'Nulla consequat massa quis ' +
+      'enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, ' +
+      'arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo' +
+      sLineBreak);
+    AssertTrue(Value['signature'].AsString = 'Mike' + sLineBreak +
+      'Girafee Academy' + sLineBreak + 'email - mike@gmail.com' + sLineBreak);
     AssertTrue(Value['id'].AsString = 'mike');
   end;
 
