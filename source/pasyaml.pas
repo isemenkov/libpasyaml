@@ -41,17 +41,15 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml, fgl;
+  Classes, SysUtils, libpasyaml, yamlresult, fgl;
 
 type
-  { TYamlFile }
   { Configuration YAML file }
   TYamlFile = class
   public
     type
       { Forward declarations }
       TOptionReader   = class;
-      TVoidResult     = class;
 
       { Errors codes }
       TErrors = (
@@ -60,26 +58,17 @@ type
 
       );
 
-      { Document encoding }
-      TEncoding = (
-        { Let the parser choose the encoding. }
-        ENCODING_DEFAULT     = Longint(YAML_ANY_ENCODING),
-        { The default UTF-8 encoding. }
-        ENCODING_UTF8        = Longint(YAML_UTF8_ENCODING),
-        { The UTF-16-LE encoding with BOM. }
-        ENCODING_UTF16LE     = Longint(YAML_UTF16LE_ENCODING),
-        { The UTF-16-BE encoding with BOM. }
-        ENCODING_UTF16BE     = Longint(YAML_UTF16BE_ENCODING)
-      );
+      { Void result, only error code is available }
+      TVoidResult = class (specialize TYamlVoidResult<TErrors>);
   protected
     function GetValue (AKey : String) : TOptionReader;
   public
-    constructor Create (Encoding : TEncoding = ENCODING_UTF8);
+    constructor Create;
     destructor Destroy; override;
 
     { Parse YAML configuration from string }
-    function Parse (ConfigString : String) : TVoidResult; {$IFNDEF DEBUG}inline;
-      {$ENDIF}
+    function Parse (ConfigString : String) : TVoidResult;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
 
     { Return option value by path }
     property Value [AKey : String] : TOptionReader read GetValue;
@@ -163,33 +152,6 @@ type
       FRoot : TOptionReader;
   public
     type
-      { Result structure which stored value and error type if exists like in GO
-      lang }
-      generic TResult<VALUE_TYPE, ERROR_TYPE> = class
-      protected
-        FValue : VALUE_TYPE;
-        FError : ERROR_TYPE;
-        FOk : Boolean;
-
-        function _Ok : Boolean;{$IFNDEF DEBUG}inline;{$ENDIF}
-      public
-        constructor Create (AValue : VALUE_TYPE; AError : ERROR_TYPE;
-          AOk : Boolean);
-        destructor Destroy; override;
-
-        property Ok : Boolean read _Ok;
-        property Value : VALUE_TYPE read FValue;
-        property Error : ERROR_TYPE read FError;
-      end;
-
-      { Void result, only error code is available }
-      TVoidResult = class(specialize TResult<Pointer, Integer>)
-      public
-        constructor Create(AError : Integer; AOk : Boolean);
-      private
-        property Value;
-      end;
-
       { Reader for configuration option }
       TOptionReader = class
       public
@@ -332,33 +294,6 @@ begin
   Result := BackPop;
 end;
 
-{ TYamlFile.TResult }
-
-constructor TYamlFile.TResult.Create (AValue : VALUE_TYPE; AError : ERROR_TYPE;
-  AOk : Boolean);
-begin
-  FValue := AValue;
-  FError := AError;
-  FOk := AOk;
-end;
-
-destructor TYamlFile.TResult.Destroy;
-begin
-  inherited Destroy;
-end;
-
-function TYamlFile.TResult._Ok : Boolean;
-begin
-  Result := FOk;
-end;
-
-{ TYamlFile.TVoidResult }
-
-constructor TYamlFile.TVoidResult.Create (AError : Integer; AOk : Boolean);
-begin
-  inherited Create (nil, AError, AOk);
-end;
-
 { TYamlFile.TOptionReader.TSequenceEnumerator }
 
 constructor TYamlFile.TOptionReader.TSequenceEnumerator.Create (AOption :
@@ -461,7 +396,7 @@ end;
 
 { TYamlFile }
 
-constructor TYamlFile.Create (Encoding : TEncoding);
+constructor TYamlFile.Create;
 begin
   FRoot := TOptionReader.Create;
 
@@ -787,7 +722,7 @@ begin
 
   FreeAndNil(Tokens);
   yaml_token_delete(@Token);
-  Result := TVoidResult.Create(Longint(ERROR_NONE), True);
+  Result := TVoidResult.Create(ERROR_NONE, True);
 end;
 
 function TYamlFile.GetValue (AKey : String) : TOptionReader;

@@ -3,7 +3,7 @@ program libpasyaml_testproject;
 {$mode objfpc}{$H+}
 
 uses
-  Interfaces, Forms, GuiTestRunner, pasyamltestcase, pasyaml;
+  Interfaces, Forms, GuiTestRunner, pasyamltestcase, pasyaml, yamlresult;
 
 {$R *.res}
 
