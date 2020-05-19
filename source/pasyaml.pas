@@ -196,6 +196,8 @@ type
       protected
         function GetValue (AKey : String) : TOptionReader;
           {$IFNDEF DEBUG}inline;{$ENDIF}
+        function ParseDateTime (AValue : String) : TDateTime;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
       public
         constructor Create;
         constructor Create (AValue : PItemValue);
@@ -431,6 +433,25 @@ begin
   end;
 end;
 
+function TYamlFile.TOptionReader.ParseDateTime (AValue : String) : TDateTime;
+var
+  yy : Word;
+  mm : Word;
+  dd : Word;
+  hh : Word;
+  mn : Word;
+  sc : Word;
+begin
+  yy := StrToInt(Copy(AValue, 1, 4));
+  mm := StrToInt(Copy(AValue, 6, 2));
+  dd := StrToInt(Copy(AValue, 9, 2));
+  hh := StrToInt(Copy(AValue, 12, 2));
+  mn := StrToInt(Copy(AValue, 15, 2));
+  sc := StrToInt(Copy(AValue, 18, 2));
+
+  Result := EncodeDateTime(yy, mm, dd, hh, mn, sc, 0);
+end;
+
 function TYamlFile.TOptionReader.IsMap : Boolean;
 begin
   Result := (FValue.ValueType = TYPE_MAP);
@@ -463,17 +484,17 @@ end;
 
 function TYamlFile.TOptionReader.AsDateTime : TDateTime;
 begin
-  Result := ScanDateTime('yyyy-mm-dd hh:mm:ss', FValue.Scalar);
+  Result := ParseDateTime(FValue.Scalar);
 end;
 
 function TYamlFile.TOptionReader.AsDate : TDate;
 begin
-  Result := StrToDate(FValue.Scalar);
+  Result := DateOf(ParseDateTime(FValue.Scalar));
 end;
 
 function TYamlFile.TOptionReader.AsTime : TTime;
 begin
-  Result := TTime(ScanDateTime('hh:mm:ss', FValue.Scalar));
+  Result := TimeOf(ParseDateTime(FValue.Scalar));
 end;
 
 function TYamlFile.TOptionReader.AsSequence : TSequenceEnumerator;
@@ -727,10 +748,6 @@ var
     while CurrentToken <> nil do
     begin
       case CurrentToken^.ValueType of
-        TYPE_ANCHOR :
-          begin
-
-          end;
         TYPE_MAP :
           begin
             if IsNone(ConfigTree.Top) then
@@ -768,9 +785,9 @@ var
                 GetAliasValue(Next(ForwardToken)^.AliasName));
             end else
             begin
-              { CurrentToken  ->   NextToken
-                     ^                ^
-                TYPE_MAP_KEY    TYPE_MAP_VALUE }
+              { CurrentToken  ->   NextToken   ->   NextToken
+                     ^                ^                 ^
+                TYPE_MAP_KEY    TYPE_MAP_VALUE    TYPE_MAP_KEY }
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key,
                 ForwardToken^.Value);
 
