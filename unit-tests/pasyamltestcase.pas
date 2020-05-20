@@ -345,6 +345,8 @@ begin
     AssertTrue(Value['fav_num'].AsFloat = 1e+10);
     AssertTrue(Value['birthday'].AsDateTime = EncodeDateTime(1994, 2, 6, 14, 33,
       22, 0));
+    AssertTrue(Value['birthday'].AsDate = EncodeDate(1994, 2, 6));
+    AssertTrue(Value['birthday'].AsTime = EncodeTime(14, 33, 22, 0));
 
     AssertTrue(Value['hobbies'].IsSequence);
     for Seq in Value['hobbies'].AsSequence do
