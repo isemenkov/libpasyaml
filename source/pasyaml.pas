@@ -248,6 +248,12 @@ type
       private
         FValue : TItemValue;
       end;
+
+      { Writer for configuration option }
+      TOptionWriter = class
+      public
+        constructor Create;
+      end;
   end;
 
 implementation
@@ -500,6 +506,12 @@ end;
 function TYamlFile.TOptionReader.AsSequence : TSequenceEnumerator;
 begin
   Result := TSequenceEnumerator.Create(@FValue);
+end;
+
+{ TYamlFile.TOptionWriter }
+constructor TYamlFile.TOptionWriter.Create;
+begin
+
 end;
 
 { TYamlFile }
