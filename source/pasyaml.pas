@@ -8,13 +8,6 @@
 (*                                                          Ukraine           *)
 (******************************************************************************)
 (*                                                                            *)
-(* Module:          Unit 'pasyaml'                                            *)
-(* Functionality:                                                             *)
-(*                                                                            *)
-(*                                                                            *)
-(*                                                                            *)
-(******************************************************************************)
-(*                                                                            *)
 (* This source  is free software;  you can redistribute  it and/or modify  it *)
 (* under the terms of the GNU General Public License as published by the Free *)
 (* Software Foundation; either version 3 of the License.                      *)
@@ -41,7 +34,7 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml, yamlresult, fgl, dateutils;
+  Classes, SysUtils, libpasyaml, utils.result, list, hash_table, dateutils;
 
 type
   { Configuration YAML file }
@@ -50,16 +43,6 @@ type
     type
       { Forward declarations }
       TOptionReader   = class;
-
-      { Errors codes }
-      TErrors = (
-        { All OK, no errors }
-        ERROR_NONE                                                  = 0
-
-      );
-
-      { Void result, only error code is available }
-      TVoidResult = class (specialize TYamlVoidResult<TErrors>);
   protected
     function GetValue (AKey : String) : TOptionReader;
       {$IFNDEF DEBUG}inline;{$ENDIF}
@@ -68,7 +51,7 @@ type
     destructor Destroy; override;
 
     { Parse YAML configuration from string }
-    function Parse (ConfigString : String) : TVoidResult;
+    procedure Parse (ConfigString : String);
 
     { Return option value by path }
     property Value [AKey : String] : TOptionReader read GetValue;
@@ -92,8 +75,8 @@ type
       );
 
       PItemValue = ^TItemValue;
-      TItemsMap = class(specialize TFPGMap<String, TOptionReader>);
-      TItemsList = class(specialize TFPGList<TOptionReader>);
+      TItemsMap = class(specialize THashTable<String, TOptionReader>);
+      TItemsList = class(specialize TList<TOptionReader>);
 
       { Config document element }
       TItemValue = record
@@ -154,15 +137,15 @@ type
           {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Get stack's top element value }
-        function  Top : PItemValue;
+        function Top : PItemValue;
           {$IFNDEF DEBUG}inline;{$ENDIF}
 
         { Take element from stack }
-        function  Pop : PItemValue;
+        function Pop : PItemValue;
           {$IFNDEF DEBUG}inline;{$ENDIF}
       private
         type
-          TItemsList = specialize TFPGList<PItemValue>;
+          TItemsList = specialize TList<PItemValue>;
         var
           FList : TItemsList;
       end;
@@ -274,21 +257,21 @@ end;
 
 function TYamlFile.TItemsSequence.Front : PItemValue;
 begin
-  Result := FList.First;
+  Result := FList.FirstEntry.Value;
 end;
 
 function TYamlFile.TItemsSequence.Front (ALevel : Cardinal) : PItemValue;
 begin
-  if FList.Count > ALevel then
+  if FList.Length > ALevel then
   begin
-    Result := FList.Items[ALevel];
+    Result := FList.NthEntry(ALevel).Value;
   end else
     Result := nil;
 end;
 
 procedure TYamlFile.TItemsSequence.FrontPush (AItem : PItemValue);
 begin
-  FList.Insert(0, AItem);
+  FList.Prepend(AItem);
 end;
 
 procedure TYamlFile.TItemsSequence.FrontPush (AItem : TYamlFile.TOptionReader);
@@ -298,10 +281,10 @@ end;
 
 function TYamlFile.TItemsSequence.FrontPop : PItemValue;
 begin
-  if FList.Count > 0 then
+  if FList.Length > 0 then
   begin
-    Result := FList.First;
-    FList.Delete(0);
+    Result := FList.FirstEntry.Value;
+    FList.FirstEntry.Remove;
   end else
   begin
     Result := nil;
@@ -310,21 +293,21 @@ end;
 
 function TYamlFile.TItemsSequence.Back : PItemValue;
 begin
-  Result := FList.Last;
+  Result := FList.LastEntry.Value;
 end;
 
 function TYamlFile.TItemsSequence.Back (ALevel : Cardinal) : PItemValue;
 begin
-  if (FList.Count - ALevel) > 0 then
+  if (FList.Length - ALevel) > 0 then
   begin
-    Result := FList.Items[FList.Count - ALevel - 1];
+    Result := FList.NthEntry(FList.Length - ALevel - 1).Value;
   end else
     Result := nil;
 end;
 
 procedure TYamlFile.TItemsSequence.BackPush (AItem : PItemValue);
 begin
-  FList.Add(AItem);
+  FList.Append(AItem);
 end;
 
 procedure TYamlFile.TItemsSequence.BackPush (AItem : TYamlFile.TOptionReader);
@@ -334,10 +317,10 @@ end;
 
 function TYamlFile.TItemsSequence.BackPop : PItemValue;
 begin
-  if FList.Count > 0 then
+  if FList.Length > 0 then
   begin
-    Result := FList.Last;
-    FList.Delete(FList.Count - 1);
+    Result := FList.LastEntry.Value;
+    FList.LastEntry.Remove;
   end else
   begin
     Result := nil;
@@ -374,7 +357,7 @@ begin
   if (FOption = nil) or (AOption^.ValueType <> TYPE_SEQUENCE) then
     FCount := 0
   else
-    FCount := FOption^.Sequence.Count;
+    FCount := FOption^.Sequence.Length;
 end;
 
 function TYamlFile.TOptionReader.TSequenceEnumerator.GetCurrent : TOptionReader;
@@ -385,7 +368,7 @@ begin
     Exit;
   end;
 
-  Result := TOptionReader.Create(@FOption^.Sequence.Items[FPosition].FValue);
+  Result := TOptionReader.Create(@FOption^.Sequence.NthEntry(FPosition).Value.FValue);
   Inc(FPosition);
 end;
 
@@ -432,7 +415,7 @@ function TYamlFile.TOptionReader.GetValue (AKey : String) : TOptionReader;
 begin
   if FValue.ValueType = TYPE_MAP then
   begin
-    Result := FValue.Map[AKey];
+    Result := FValue.Map.Search(AKey);
   end else
   begin
     Result := TOptionReader.Create;
@@ -531,7 +514,7 @@ begin
   inherited Destroy;
 end;
 
-function TYamlFile.Parse(ConfigString : String) : TVoidResult;
+procedure TYamlFile.Parse(ConfigString : String);
 const
   {%H-}PREVIOUS_TOKEN_POSITION                                           = 0;
   THROUGH_TWO_TOKENS_POSITION                                            = 1;
@@ -600,7 +583,7 @@ var
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.ValueType := TYPE_MAP;
-      AElement^.Map := TItemsMap.Create;
+      AElement^.Map := TItemsMap.Create(@HashString);
     end;
 
     { Initialize AElement.Sequence field }
@@ -617,7 +600,7 @@ var
     begin
       ASequence.Push(New(PItemValue));
       ASequence.Top^.ValueType := TYPE_MAP;
-      ASequence.Top^.Map := TItemsMap.Create;
+      ASequence.Top^.Map := TItemsMap.Create(@HashString);
     end;
 
     { Create new ASequence element, push it and initialize }
@@ -689,45 +672,45 @@ var
       PChar); overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Map[AKey] := CreateOptionReader(TYPE_SCALAR);
-      AElement^.Map[AKey].FValue.Scalar := AValue;
+      AElement^.Map.Insert(AKey, CreateOptionReader(TYPE_SCALAR));
+      AElement^.Map.Search(AKey).FValue.Scalar := AValue;
     end;
 
     { Set AElement.Map[AKey] := New(Map) }
     procedure CreateMapValue (AElement : PItemValue; AKey : PChar); overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Map[AKey] := CreateOptionReader(TYPE_NONE);
+      AElement^.Map.Insert(AKey, CreateOptionReader(TYPE_NONE));
     end;
 
     { Set AElement.Map[AKey] := New(Sequence) }
     procedure CreateSequenceValue (AElement : PItemValue; AKey : PChar);
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Map[AKey] := CreateOptionReader(TYPE_NONE);
+      AElement^.Map.Insert(AKey, CreateOptionReader(TYPE_NONE));
     end;
 
     { Store anchor key and value }
     procedure CreateAnchorValue (AKey : PChar; AValue : PChar);
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AliasesMap[AKey] := CreateOptionReader(TYPE_SCALAR);
-      AliasesMap[AKey].FValue.Scalar := AValue;
+      AliasesMap.Insert(AKey, CreateOptionReader(TYPE_SCALAR));
+      AliasesMap.Search(AKey).FValue.Scalar := AValue;
     end;
 
     { Return Alias[Key] value }
     function GetAliasValue (AKey : PChar) : PChar;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      Result := AliasesMap[AKey].FValue.Scalar;
+      Result := AliasesMap.Search(AKey).FValue.Scalar;
     end;
 
     { Create new element and add it to AElement.Sequence }
     function AddSequenceValue (AElement : PItemValue) : PItemValue; overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Sequence.Add(TOptionReader.Create);
-      Result := @AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue;
+      AElement^.Sequence.Append(TOptionReader.Create);
+      Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue;
     end;
 
     { Create new element and add it to AElement.Sequence TYPE_SCALAR type and
@@ -736,12 +719,12 @@ var
       PItemValue; overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Sequence.Add(TOptionReader.Create);
-      AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue.ValueType :=
+      AElement^.Sequence.Append(TOptionReader.Create);
+      AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue.ValueType :=
         TYPE_SCALAR;
-      AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue.Scalar :=
+      AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue.Scalar :=
         AValue;
-      Result := @AElement^.Sequence.Items[AElement^.Sequence.Count - 1].FValue;
+      Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue;
     end;
 
     { Return TRUE if AElement sequence entry contains value }
@@ -752,7 +735,7 @@ var
     end;
 
   begin
-    AliasesMap := TItemsMap.Create;
+    AliasesMap := TItemsMap.Create(@HashString);
     ConfigTree := TItemsSequence.Create;
     ConfigTree.Push(FRoot);
 
@@ -778,7 +761,7 @@ var
             if IsMapValue(Next(ForwardToken)) and IsSequence(ForwardNext) then
             begin
               CreateSequenceValue(ConfigTree.Top, CurrentToken^.Key);
-              ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
+              ConfigTree.Push(ConfigTree.Top^.Map.Search(CurrentToken^.Key));
             end else
             { CurrentToken  ->   NextToken   ->   NextToken
                    ^                ^                 ^
@@ -786,7 +769,7 @@ var
             if IsMapValue(ForwardToken) and IsMap(ForwardNext) then
             begin
               CreateMapValue(ConfigTree.Top, CurrentToken^.Key);
-              ConfigTree.Push(ConfigTree.Top^.Map[CurrentToken^.Key]);
+              ConfigTree.Push(ConfigTree.Top^.Map.Search(CurrentToken^.Key));
             end else
             { CurrentToken  ->   NextToken   ->   NextToken
                    ^                ^                 ^
@@ -1002,14 +985,13 @@ begin
 
   yaml_token_delete(@Token);
   FreeAndNil(Tokens);
-  Result := TVoidResult.Create(ERROR_NONE, True);
 end;
 
 function TYamlFile.GetValue (AKey : String) : TOptionReader;
 begin
   if FRoot.FValue.ValueType = TYPE_MAP then
   begin
-    Result := FRoot.FValue.Map[AKey];
+    Result := FRoot.FValue.Map.Search(AKey);
   end else
   begin
     Result := TOptionReader.Create;
