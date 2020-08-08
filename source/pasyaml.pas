@@ -34,7 +34,8 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml, utils.result, list, hash_table, dateutils;
+  Classes, SysUtils, libpasyaml, utils.result, list, hash_table, dateutils,
+  utils.functor;
 
 type
   { Configuration YAML file }
@@ -59,7 +60,7 @@ type
     const
       ERROR_OK                                                      =  1;
 
-    type
+    type    
       { Config document elements types }
       TItemValueType = (
         TYPE_NONE,
@@ -75,8 +76,21 @@ type
       );
 
       PItemValue = ^TItemValue;
+      
+      TItemValueLessFunctor = class(specialize TBinaryLogicFunctor<PItemValue>)
+      public
+        function Call(AValue1, AValue2 : PItemValue) : Boolean; override;
+      end;
+
+      TOptionReaderLessFunctor = 
+        class(specialize TBinaryLogicFunctor<TOptionReader>)
+      public
+        function Call(AValue1, AValue2 : TOptionReader) : Boolean; override;
+      end;
+      
       TItemsMap = class(specialize THashTable<String, TOptionReader>);
-      TItemsList = class(specialize TList<TOptionReader>);
+      TItemsList = class(specialize TList<TOptionReader, 
+        TOptionReaderLessFunctor>);
 
       { Config document element }
       TItemValue = record
@@ -145,7 +159,7 @@ type
           {$IFNDEF DEBUG}inline;{$ENDIF}
       private
         type
-          TItemsList = specialize TList<PItemValue>;
+          TItemsList = specialize TList<PItemValue, TItemValueLessFunctor>;
         var
           FList : TItemsList;
       end;
@@ -240,6 +254,27 @@ type
   end;
 
 implementation
+
+{ TYamlFile.TItemValueLessFunctor }
+
+function TYamlFile.TItemValueLessFunctor.Call(AValue1, AValue2 : PItemValue) : 
+  Boolean;
+begin
+  if (AValue1 = nil) or (AValue2 = nil) then
+  begin
+    Exit(False);
+  end;
+
+  Result := AValue1^.ValueType < AValue2^.ValueType;
+end;
+
+{ TYamlFile.TOptionReaderLessFunctor }
+
+function TYamlFile.TOptionReaderLessFunctor.Call(AValue1, AValue2 : 
+  TOptionReader) : Boolean;
+begin
+  Result := AValue1.FValue.ValueType < AValue2.FValue.ValueType;
+end;
 
 { TYamlFile.TItemsSequence }
 
