@@ -32,7 +32,7 @@
         <PackageName Value="FCL"/>
       </Item3>
     </RequiredPackages>
-    <Units Count="12">
+    <Units Count="14">
       <Unit0>
         <Filename Value="libpasyaml_testproject.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -62,25 +62,33 @@
         <IsPartOfProject Value="True"/>
       </Unit6>
       <Unit7>
-        <Filename Value="../libpasc-algorithms/source/arraylist.pas"/>
+        <Filename Value="../pascalutils/source/utils.functor.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit7>
       <Unit8>
-        <Filename Value="../libpasc-algorithms/source/avl_tree.pas"/>
+        <Filename Value="../pascalutils/source/utils.datasize.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit8>
       <Unit9>
-        <Filename Value="../libpasc-algorithms/source/hash_table.pas"/>
+        <Filename Value="../pascalutils/source/utils.timeinterval.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit9>
       <Unit10>
-        <Filename Value="../libpasc-algorithms/source/list.pas"/>
+        <Filename Value="../libpasc-algorithms/source/container.arraylist.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit10>
       <Unit11>
-        <Filename Value="../pascalutils/source/utils.functor.pas"/>
+        <Filename Value="../libpasc-algorithms/source/container.avltree.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit11>
+      <Unit12>
+        <Filename Value="../libpasc-algorithms/source/container.hashtable.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit12>
+      <Unit13>
+        <Filename Value="../libpasc-algorithms/source/container.list.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit13>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

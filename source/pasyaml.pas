@@ -34,8 +34,8 @@ unit pasyaml;
 interface
 
 uses
-  Classes, SysUtils, libpasyaml, utils.result, list, hash_table, dateutils,
-  utils.functor;
+  Classes, SysUtils, libpasyaml, dateutils, utils.result, container.list, 
+  container.hashtable, utils.functor;
 
 type
   { Configuration YAML file }
@@ -43,8 +43,9 @@ type
   public
     type
       { Forward declarations }
-      TOptionReader   = class;
+      TOptionReader = class;
   protected
+    { Return value by key }
     function GetValue (AKey : String) : TOptionReader;
       {$IFNDEF DEBUG}inline;{$ENDIF}
   public
@@ -76,21 +77,24 @@ type
       );
 
       PItemValue = ^TItemValue;
-      
-      TItemValueLessFunctor = class(specialize TBinaryLogicFunctor<PItemValue>)
+
+      { PItemValue compare functor }  
+      TItemValueCompareFunctor =
+        class(specialize TBinaryFunctor<PItemValue, Integer>)
       public
-        function Call(AValue1, AValue2 : PItemValue) : Boolean; override;
+        function Call(AValue1, AValue2 : PItemValue) : Integer; override;
       end;
 
-      TOptionReaderLessFunctor = 
-        class(specialize TBinaryLogicFunctor<TOptionReader>)
+      { TOptionReader compare functor }
+      TOptionReaderCompareFunctor = 
+        class(specialize TBinaryFunctor<TOptionReader, Integer>)
       public
-        function Call(AValue1, AValue2 : TOptionReader) : Boolean; override;
+        function Call(AValue1, AValue2 : TOptionReader) : Integer; override;
       end;
       
       TItemsMap = class(specialize THashTable<String, TOptionReader>);
       TItemsList = class(specialize TList<TOptionReader, 
-        TOptionReaderLessFunctor>);
+        TOptionReaderCompareFunctor>);
 
       { Config document element }
       TItemValue = record
@@ -159,7 +163,7 @@ type
           {$IFNDEF DEBUG}inline;{$ENDIF}
       private
         type
-          TItemsList = specialize TList<PItemValue, TItemValueLessFunctor>;
+          TItemsList = specialize TList<PItemValue, TItemValueCompareFunctor>;
         var
           FList : TItemsList;
       end;
@@ -255,25 +259,39 @@ type
 
 implementation
 
-{ TYamlFile.TItemValueLessFunctor }
+{ TYamlFile.TItemValueCompareFunctor }
 
-function TYamlFile.TItemValueLessFunctor.Call(AValue1, AValue2 : PItemValue) : 
-  Boolean;
+function TYamlFile.TItemValueCompareFunctor.Call(AValue1, AValue2 : PItemValue) 
+  : Integer;
 begin
-  if (AValue1 = nil) or (AValue2 = nil) then
+  if (AValue1 = nil) or (AValue2 = nil) or (AValue1^.ValueType < 
+    AValue2^.ValueType) then
   begin
-    Exit(False);
+    Result := -1;
+  end else if AValue2^.ValueType < AValue1^.ValueType then
+  begin
+    Result := 1;
+  end else
+  begin
+    Result := 0;
   end;
-
-  Result := AValue1^.ValueType < AValue2^.ValueType;
 end;
 
-{ TYamlFile.TOptionReaderLessFunctor }
+{ TYamlFile.TOptionReaderCompareFunctor }
 
-function TYamlFile.TOptionReaderLessFunctor.Call(AValue1, AValue2 : 
-  TOptionReader) : Boolean;
+function TYamlFile.TOptionReaderCompareFunctor.Call(AValue1, AValue2 : 
+  TOptionReader) : Integer;
 begin
-  Result := AValue1.FValue.ValueType < AValue2.FValue.ValueType;
+  if AValue1.FValue.ValueType < AValue2.FValue.ValueType then
+  begin
+    Result := -1;
+  end else if AValue2.FValue.ValueType < AValue1.FValue.ValueType then
+  begin
+    Result := 1;
+  end else
+  begin
+    Result := 0;
+  end;
 end;
 
 { TYamlFile.TItemsSequence }
@@ -403,7 +421,8 @@ begin
     Exit;
   end;
 
-  Result := TOptionReader.Create(@FOption^.Sequence.NthEntry(FPosition).Value.FValue);
+  Result := 
+    TOptionReader.Create(@FOption^.Sequence.NthEntry(FPosition).Value.FValue);
   Inc(FPosition);
 end;
 
@@ -466,12 +485,12 @@ var
   mn : Word;
   sc : Word;
 begin
-  yy := StrToInt(Copy(AValue, 1, 4));
-  mm := StrToInt(Copy(AValue, 6, 2));
-  dd := StrToInt(Copy(AValue, 9, 2));
-  hh := StrToInt(Copy(AValue, 12, 2));
-  mn := StrToInt(Copy(AValue, 15, 2));
-  sc := StrToInt(Copy(AValue, 18, 2));
+  yy := StrToIntDef(Copy(AValue, 1, 4), 0);
+  mm := StrToIntDef(Copy(AValue, 6, 2), 0);
+  dd := StrToIntDef(Copy(AValue, 9, 2), 0);
+  hh := StrToIntDef(Copy(AValue, 12, 2), 0);
+  mn := StrToIntDef(Copy(AValue, 15, 2), 0);
+  sc := StrToIntDef(Copy(AValue, 18, 2), 0);
 
   Result := EncodeDateTime(yy, mm, dd, hh, mn, sc, 0);
 end;
@@ -745,7 +764,8 @@ var
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.Sequence.Append(TOptionReader.Create);
-      Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue;
+      Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1)
+        .Value.FValue;
     end;
 
     { Create new element and add it to AElement.Sequence TYPE_SCALAR type and
@@ -755,11 +775,12 @@ var
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.Sequence.Append(TOptionReader.Create);
-      AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue.ValueType :=
-        TYPE_SCALAR;
-      AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue.Scalar :=
-        AValue;
-      Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue;
+      AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue
+        .ValueType := TYPE_SCALAR;
+      AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue
+        .Scalar := AValue;
+      Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1)
+        .Value.FValue;
     end;
 
     { Return TRUE if AElement sequence entry contains value }

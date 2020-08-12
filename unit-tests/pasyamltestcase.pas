@@ -343,10 +343,12 @@ begin
     AssertTrue(Value['age'].AsInteger = 23);
     AssertTrue(Value['gpa'].AsFloat = 3.5);
     AssertTrue(Value['fav_num'].AsFloat = 1e+10);
-    AssertTrue(Value['birthday'].AsDateTime = EncodeDateTime(1994, 2, 6, 14, 33,
-      22, 0));
-    AssertTrue(Value['birthday'].AsDate = EncodeDate(1994, 2, 6));
-    AssertTrue(Value['birthday'].AsTime = EncodeTime(14, 33, 22, 0));
+    AssertTrue(CompareDateTime(Value['birthday'].AsDateTime,
+      EncodeDateTime(1994, 2, 6, 14, 33, 22, 0)) = 0);
+    AssertTrue(CompareTime(Value['birthday'].AsTime, EncodeTime(14, 33, 22, 0))
+      = 0);
+    AssertTrue(CompareDate(Value['birthday'].AsDate, EncodeDate(1994, 2, 6))
+      = 0);
 
     AssertTrue(Value['hobbies'].IsSequence);
     for Seq in Value['hobbies'].AsSequence do
