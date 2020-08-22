@@ -35,7 +35,7 @@ interface
 
 uses
   Classes, SysUtils, libpasyaml, dateutils, utils.result, container.list, 
-  container.hashtable, utils.functor;
+  container.avltree, utils.functor;
 
 type
   { Configuration YAML file }
@@ -92,7 +92,8 @@ type
         function Call(AValue1, AValue2 : TOptionReader) : Integer; override;
       end;
       
-      TItemsMap = class(specialize THashTable<String, TOptionReader>);
+      TItemsMap = class(specialize TAvlTree<String, TOptionReader,
+        TCompareFunctorString>);
       TItemsList = class(specialize TList<TOptionReader, 
         TOptionReaderCompareFunctor>);
 
@@ -637,7 +638,7 @@ var
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
       AElement^.ValueType := TYPE_MAP;
-      AElement^.Map := TItemsMap.Create(@HashString);
+      AElement^.Map := TItemsMap.Create;
     end;
 
     { Initialize AElement.Sequence field }
@@ -654,7 +655,7 @@ var
     begin
       ASequence.Push(New(PItemValue));
       ASequence.Top^.ValueType := TYPE_MAP;
-      ASequence.Top^.Map := TItemsMap.Create(@HashString);
+      ASequence.Top^.Map := TItemsMap.Create;
     end;
 
     { Create new ASequence element, push it and initialize }
@@ -791,7 +792,7 @@ var
     end;
 
   begin
-    AliasesMap := TItemsMap.Create(@HashString);
+    AliasesMap := TItemsMap.Create;
     ConfigTree := TItemsSequence.Create;
     ConfigTree.Push(FRoot);
 
