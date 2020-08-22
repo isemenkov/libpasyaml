@@ -15,11 +15,11 @@ type
   published
     procedure Test_YamlFile_CreateNewEmpty;
     procedure Test_YamlFile_ParseMap;
-    procedure TestSequenceItemMapParse;
-    procedure TestSequenceAndMapParse;
-    procedure TestMultipleMapParse;
-    procedure TestMultipleSequenceParse;
-    procedure TestTypesParse;
+    procedure Test_YamlFile_ParseSequenceItemMap;
+    procedure Test_YamlFile_ParseSequenceAndMap;
+    procedure Test_YamlFile_ParseMultipleMap;
+    procedure Test_YamlFile_ParseMultipleSequence;
+    procedure Test_YamlFile_ParseTypes;
   end;
 
 implementation
@@ -64,7 +64,7 @@ begin
   FreeAndNil(YamlFile);
 end;
 
-procedure TYamlTestCase.TestSequenceItemMapParse;
+procedure TYamlTestCase.Test_YamlFile_ParseSequenceItemMap;
 const
   config : string = ''                                            +
     'title     : Finex 2011'                                      + sLineBreak +
@@ -79,20 +79,30 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
 
-  AssertTrue(YamlFile.Value['title'].AsString = 'Finex 2011');
-  AssertTrue(YamlFile.Value['img_url'].AsString = '/finex/html/img');
+  AssertTrue('#Test_YamlFile_ParseSequenceItemMap -> ' +
+     'title value is not correct',
+     YamlFile.Value['title'].AsString = 'Finex 2011');
+  AssertTrue('#Test_YamlFile_ParseSequenceItemMap -> ' +
+     'img_url value is not correct',
+     YamlFile.Value['img_url'].AsString = '/finex/html/img');
 
-  AssertTrue(YamlFile.Value['pages'].IsSequence);
+  AssertTrue('#Test_YamlFile_ParseSequenceItemMap -> ' +
+     'pages value is not sequence',
+     YamlFile.Value['pages'].IsSequence);
   for Seq in YamlFile.Value['pages'].AsSequence do
   begin
-    AssertTrue(Seq.Value['act'].AsString = 'idx');
-    AssertTrue(Seq.Value['title'].AsString = 'welcome');
+    AssertTrue('#Test_YamlFile_ParseSequenceItemMap -> ' +
+     'pages.act value is not correct',
+     Seq.Value['act'].AsString = 'idx');
+    AssertTrue('#Test_YamlFile_ParseSequenceItemMap -> ' +
+     'pages.title value is not correct',
+     Seq.Value['title'].AsString = 'welcome');
   end;
 
   FreeAndNil(YamlFile);
 end;
 
-procedure TYamlTestCase.TestSequenceAndMapParse;
+procedure TYamlTestCase.Test_YamlFile_ParseSequenceAndMap;
 const
   config : string = ''                                            +
     '# config/public.yaml'                                        + sLineBreak +
@@ -128,36 +138,74 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
 
-  AssertTrue(YamlFile.Value['title'].AsString = 'Finex 2011');
-  AssertTrue(YamlFile.Value['img_url'].AsString = '/finex/html/img/');
-  AssertTrue(YamlFile.Value['css_url'].AsString = '/finex/html/style/');
-  AssertTrue(YamlFile.Value['js_url'].AsString = '/finex/html/js/');
-  AssertTrue(YamlFile.Value['template_dir'].AsString = 'html/templ/');
-  AssertTrue(YamlFile.Value['default_act'].AsString = 'idx');
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'title value is not correct',
+     YamlFile.Value['title'].AsString = 'Finex 2011');
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'img_url value is not correct',
+     YamlFile.Value['img_url'].AsString = '/finex/html/img/');
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'css_url value is not correct',
+     YamlFile.Value['css_url'].AsString = '/finex/html/style/');
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'js_url value is not correct',
+     YamlFile.Value['js_url'].AsString = '/finex/html/js/');
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'template_dir value is not correct',
+     YamlFile.Value['template_dir'].AsString = 'html/templ/');
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'default_act value is not correct',
+     YamlFile.Value['default_act'].AsString = 'idx');
 
-  AssertTrue(YamlFile.Value['pages'].IsSequence);
+  AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+     'pages value is not sequence',
+     YamlFile.Value['pages'].IsSequence);
   for Seq in YamlFile.Value['pages'].AsSequence do
   begin
     case Index of
       0 : begin
-        AssertTrue(Seq.Value['act'].AsString = 'idx');
-        AssertTrue(Seq.Value['title'].AsString = 'Welcome');
-        AssertTrue(Seq.Value['html'].AsString = 'public/welcome.phtml');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.act value is not correct',
+          Seq.Value['act'].AsString = 'idx');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.title value is not correct',
+          Seq.Value['title'].AsString = 'Welcome');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.html value is not correct',
+          Seq.Value['html'].AsString = 'public/welcome.phtml');
       end;
       1 : begin
-        AssertTrue(Seq.Value['act'].AsString = 'reg');
-        AssertTrue(Seq.Value['title'].AsString = 'Register');
-        AssertTrue(Seq.Value['html'].AsString = 'public/register.phtml');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.act value is not correct',
+          Seq.Value['act'].AsString = 'reg');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.title value is not correct',
+          Seq.Value['title'].AsString = 'Register');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.html value is not correct',
+          Seq.Value['html'].AsString = 'public/register.phtml');
       end;
       2 : begin
-        AssertTrue(Seq.Value['act'].AsString = 'log');
-        AssertTrue(Seq.Value['title'].AsString = 'Log in');
-        AssertTrue(Seq.Value['html'].AsString = 'public/login.phtml');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.act value is not correct',
+          Seq.Value['act'].AsString = 'log');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.title value is not correct',
+          Seq.Value['title'].AsString = 'Log in');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.html value is not correct',
+          Seq.Value['html'].AsString = 'public/login.phtml');
       end;
       3 : begin
-        AssertTrue(Seq.Value['act'].AsString = 'out');
-        AssertTrue(Seq.Value['title'].AsString = 'Log out');
-        AssertTrue(Seq.Value['html'].AsString = 'public/logout.phtml');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.act value is not correct',
+          Seq.Value['act'].AsString = 'out');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.title value is not correct',
+          Seq.Value['title'].AsString = 'Log out');
+        AssertTrue('#Test_YamlFile_ParseSequenceAndMap -> ' +
+          'pages.html value is not correct',
+          Seq.Value['html'].AsString = 'public/logout.phtml');
       end;
     end;
     Inc(Index);
@@ -167,7 +215,7 @@ begin
   FreeAndNil(YamlFile);
 end;
 
-procedure TYamlTestCase.TestMultipleMapParse;
+procedure TYamlTestCase.Test_YamlFile_ParseMultipleMap;
 const
   config : string = ''                                            +
     'nodes:'                                                      + sLineBreak +
@@ -193,43 +241,69 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
 
-  AssertTrue(YamlFile.Value['nodes'].IsSequence);
+  AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+     'nodes value is not sequence',
+     YamlFile.Value['nodes'].IsSequence);
   for Seq in YamlFile.Value['nodes'].AsSequence do
   begin
     case Index of
       0 : begin
-        AssertTrue(Seq.Value['name'].AsString = 'controller');
-        AssertTrue(Seq.Value['description'].AsString = 'Cloud controller node');
-        AssertTrue(Seq.Value['nics'].IsMap);
-        AssertTrue(Seq.Value['nics'].Value['management_network'].AsString
-          = 'eth0');
-        AssertTrue(Seq.Value['nics'].Value['data_network'].AsString = 'eth1');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.name value is not correct',
+          Seq.Value['name'].AsString = 'controller');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.description value is not correct',
+          Seq.Value['description'].AsString = 'Cloud controller node');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.nics value is not map',
+          Seq.Value['nics'].IsMap);
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.nics.management_network value is not correct',
+          Seq.Value['nics'].Value['management_network'].AsString = 'eth0');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.nics.data_network value is not correct',
+          Seq.Value['nics'].Value['data_network'].AsString = 'eth1');
       end;
       1 : begin
-        AssertTrue(Seq.Value['name'].AsString = 'kvm_compute');
-        AssertTrue(Seq.Value['description'].AsString =
-          'Cloud KVM compute node');
-        AssertTrue(Seq.Value['nics'].IsMap);
-        AssertTrue(Seq.Value['nics'].Value['management_network'].AsString
-          = 'eth0');
-        AssertTrue(Seq.Value['nics'].Value['data_network'].AsString = 'eth1');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.name value is not correct',
+          Seq.Value['name'].AsString = 'kvm_compute');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.description value is not correct',
+          Seq.Value['description'].AsString = 'Cloud KVM compute node');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.nics value is not map',
+          Seq.Value['nics'].IsMap);
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.nics.management_network value is not correct',
+          Seq.Value['nics'].Value['management_network'].AsString = 'eth0');
+        AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+          'nodes.nics.data_network value is not correct',
+          Seq.Value['nics'].Value['data_network'].AsString = 'eth1');
       end;
     end;
     Inc(Index);
   end;
   AssertTrue(Index = 2);
 
-  AssertTrue(YamlFile.Value['environment'].IsMap);
-  AssertTrue(YamlFile.Value['environment'].Value['base'].AsString
-    = 'example-os');
-  AssertTrue(YamlFile.Value['environment'].Value['override_attributes'].IsMap);
-  AssertTrue(YamlFile.Value['environment'].Value['override_attributes']
+  AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+    'enviroment value is not map',
+    YamlFile.Value['environment'].IsMap);
+  AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+    'enviroment.base value is not correct',
+    YamlFile.Value['environment'].Value['base'].AsString = 'example-os');
+  AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+    'enviroment.override_attributes value is not map',
+    YamlFile.Value['environment'].Value['override_attributes'].IsMap);
+  AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
+    'enviroment.override_attributes value is not correct',
+    YamlFile.Value['environment'].Value['override_attributes']
     .Value['ntp.servers'].AsString = '0.pool.ntp.org');
 
   FreeAndNil(YamlFile);
 end;
 
-procedure TYamlTestCase.TestMultipleSequenceParse;
+procedure TYamlTestCase.Test_YamlFile_ParseMultipleSequence;
 const
   config : string = ''                                            +
     '# =========================================================' + sLineBreak +
@@ -256,28 +330,46 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
 
-  AssertTrue(YamlFile.Value['nodes'].IsSequence);
+  AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+    'nodes value is not sequence',
+    YamlFile.Value['nodes'].IsSequence);
   for Seq in YamlFile.Value['nodes'].AsSequence do
   begin
     case Index of
       0 : begin
-        AssertTrue(Seq.Value['name'].AsString = 'ha_controller');
-        AssertTrue(Seq.Value['fqdn'].IsSequence);
+        AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+          'nodes.name value is not correct',
+          Seq.Value['name'].AsString = 'ha_controller');
+        AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+          'nodes.fqdn value is not sequence',
+          Seq.Value['fqdn'].IsSequence);
 
         for InnerSeq in Seq.Value['fqdn'].AsSequence do
         begin
           case InnerIndex of
             0 : begin
-              AssertTrue(InnerSeq.IsScalar);
-              AssertTrue(InnerSeq.AsString = 'YOUR_HA_CONTROLLER_NODE_1_FQDN');
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not scalar',
+                InnerSeq.IsScalar);
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not correct',
+                InnerSeq.AsString = 'YOUR_HA_CONTROLLER_NODE_1_FQDN');
             end;
             1 : begin
-              AssertTrue(InnerSeq.IsScalar);
-              AssertTrue(InnerSeq.AsString = 'YOUR_HA_CONTROLLER_NODE_2_FQDN');
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not scalar',
+                InnerSeq.IsScalar);
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not correct',
+                InnerSeq.AsString = 'YOUR_HA_CONTROLLER_NODE_2_FQDN');
             end;
             2 : begin
-              AssertTrue(InnerSeq.IsScalar);
-              AssertTrue(InnerSeq.AsString = 'YOUR_HA_CONTROLLER_NODE_3_FQDN');
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not scalar',
+                InnerSeq.IsScalar);
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not correct',
+                InnerSeq.AsString = 'YOUR_HA_CONTROLLER_NODE_3_FQDN');
             end;
           end;
           Inc(InnerIndex);
@@ -285,15 +377,23 @@ begin
         AssertTrue(InnerIndex = 3);
       end;
       1 : begin
-        AssertTrue(Seq.Value['name'].AsString = 'kvm_compute');
-        AssertTrue(Seq.Value['fqdn'].IsSequence);
+        AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+          'nodes.name value is not correct',
+          Seq.Value['name'].AsString = 'kvm_compute');
+        AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+          'nodes.fqdn value is not sequence',
+          Seq.Value['fqdn'].IsSequence);
 
         for InnerSeq in Seq.Value['fqdn'].AsSequence do
         begin
           case InnerIndex of
             0 : begin
-              AssertTrue(InnerSeq.IsScalar);
-              AssertTrue(InnerSeq.AsString = 'YOUR_KVM_COMPUTE_NODE_1_FQDN');
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not scalar',
+                InnerSeq.IsScalar);
+              AssertTrue('#Test_YamlFile_ParseMultipleSequence -> ' +
+                'nodes.fqdn value is not correct',
+                InnerSeq.AsString = 'YOUR_KVM_COMPUTE_NODE_1_FQDN');
             end;
           end;
           Inc(InnerIndex);
@@ -309,7 +409,7 @@ begin
   FreeAndNil(YamlFile);
 end;
 
-procedure TYamlTestCase.TestTypesParse;
+procedure TYamlTestCase.Test_YamlFile_ParseTypes;
 const
   config : string = ''                                            +
     'person:'                                                     + sLineBreak +
@@ -353,33 +453,57 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
 
-  AssertTrue(YamlFile.Value['person'].IsMap);
+  AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+    'person value is not map',
+    YamlFile.Value['person'].IsMap);
   with YamlFile.Value['person'] do
   begin
-    AssertTrue(Value['name'].AsString = 'mike');
-    AssertTrue(Value['occupation'].AsString = 'programmer');
-    AssertTrue(Value['age'].AsInteger = 23);
-    AssertTrue(Value['gpa'].AsFloat = 3.5);
-    AssertTrue(Value['fav_num'].AsFloat = 1e+10);
-    AssertTrue(CompareDateTime(Value['birthday'].AsDateTime,
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.name value is not correct',
+      Value['name'].AsString = 'mike');
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.occupation value is not correct',
+      Value['occupation'].AsString = 'programmer');
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.age value is not correct',
+      Value['age'].AsInteger = 23);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.gpa value is not correct',
+      Value['gpa'].AsFloat = 3.5);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.fav_num value is not correct',
+      Value['fav_num'].AsFloat = 1e+10);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.birthday value is not correct',
+      CompareDateTime(Value['birthday'].AsDateTime,
       EncodeDateTime(1994, 2, 6, 14, 33, 22, 0)) = 0);
-    AssertTrue(CompareTime(Value['birthday'].AsTime, EncodeTime(14, 33, 22, 0))
-      = 0);
-    AssertTrue(CompareDate(Value['birthday'].AsDate, EncodeDate(1994, 2, 6))
-      = 0);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.birthday value is not correct',
+      CompareTime(Value['birthday'].AsTime, EncodeTime(14, 33, 22, 0)) = 0);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.birthday value is not correct',
+      CompareDate(Value['birthday'].AsDate, EncodeDate(1994, 2, 6)) = 0);
 
-    AssertTrue(Value['hobbies'].IsSequence);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'person.hobbies value is not sequence',
+      Value['hobbies'].IsSequence);
     for Seq in Value['hobbies'].AsSequence do
     begin
       case Index of
         0 : begin
-          AssertTrue(Seq.AsString = 'hiking');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'person.hobbies value is not correct',
+            Seq.AsString = 'hiking');
         end;
         1 : begin
-          AssertTrue(Seq.AsString = 'movies');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'person.hobbies value is not correct',
+            Seq.AsString = 'movies');
         end;
         2 : begin
-          AssertTrue(Seq.AsString = 'riding bike');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'person.hobbies value is not correct',
+            Seq.AsString = 'riding bike');
         end;
       end;
       Inc(Index);
@@ -387,15 +511,20 @@ begin
     AssertTrue(Index = 3);
 
     Index := 0;
-    AssertTrue(Value['movies'].IsSequence);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'movies value is not sequence', Value['movies'].IsSequence);
     for Seq in Value['movies'].AsSequence do
     begin
       case Index of
         0 : begin
-          AssertTrue(Seq.AsString = 'Dark Knight');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'movies value is not correct',
+            Seq.AsString = 'Dark Knight');
         end;
         1 : begin
-          AssertTrue(Seq.AsString = 'Good Will Hunting');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'movies value is not correct',
+            Seq.AsString = 'Good Will Hunting');
         end;
       end;
       Inc(Index);
@@ -403,34 +532,53 @@ begin
     AssertTrue(Index = 2);
 
     Index := 0;
-    AssertTrue(Value['friends'].IsSequence);
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'friends value is not sequence', Value['friends'].IsSequence);
     for Seq in Value['friends'].AsSequence do
     begin
       case Index of
         0 : begin
-          AssertTrue(Seq.Value['name'].AsString = 'Steph');
-          AssertTrue(Seq.Value['age'].AsInteger = 22);
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'friends.name value is not correct',
+            Seq.Value['name'].AsString = 'Steph');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'friends.age value is not correct',
+            Seq.Value['age'].AsInteger = 22);
         end;
         1 : begin
-          AssertTrue(Seq.Value['name'].AsString = 'Adam');
-          AssertTrue(Seq.Value['age'].AsInteger = 22);
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'friends.name value is not correct',
+            Seq.Value['name'].AsString = 'Adam');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'friends.age value is not correct',
+            Seq.Value['age'].AsInteger = 22);
         end;
         2 : begin
-          AssertTrue(Seq.Value['name'].AsString = 'Joe');
-          AssertTrue(Seq.Value['age'].AsInteger = 23);
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'friends.name value is not correct',
+            Seq.Value['name'].AsString = 'Joe');
+          AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+            'friends.age value is not correct',
+            Seq.Value['age'].AsInteger = 23);
         end;
       end;
       Inc(Index);
     end;
     AssertTrue(Index = 3);
 
-    AssertTrue(Value['description'].AsString = 'Nulla consequat massa quis ' +
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'description value is not correct',
+      Value['description'].AsString = 'Nulla consequat massa quis ' +
       'enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, ' +
       'arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo' +
       sLineBreak);
-    AssertTrue(Value['signature'].AsString = 'Mike' + sLineBreak +
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'signature value is not correct',
+      Value['signature'].AsString = 'Mike' + sLineBreak +
       'Girafee Academy' + sLineBreak + 'email - mike@gmail.com' + sLineBreak);
-    AssertTrue(Value['id'].AsString = 'mike');
+    AssertTrue('#Test_YamlFile_ParseTypes -> ' +
+      'id value is not correct',
+      Value['id'].AsString = 'mike');
   end;
 
   FreeAndNil(YamlFile);
