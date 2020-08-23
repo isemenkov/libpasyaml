@@ -59,6 +59,12 @@ begin
   YamlFile := TYamlFile.Create;
   YamlFile.Parse(config);
   
+  { Can use key path }
+  Writeln(YamlFile['person.name'].AsString);
+  Writeln(YamlFile['person.occupation'].AsString);
+  Writeln(YamlFile['person.age'].AsString);
+
+  { Or single key }
   with YamlFile.Value['person'] do
   begin
     Writeln(Value['name'].AsString);
