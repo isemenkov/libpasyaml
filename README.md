@@ -60,9 +60,9 @@ begin
   YamlFile.Parse(config);
   
   { Can use key path }
-  Writeln(YamlFile['person.name'].AsString);
-  Writeln(YamlFile['person.occupation'].AsString);
-  Writeln(YamlFile['person.age'].AsString);
+  Writeln(YamlFile.Value['person.name'].AsString);
+  Writeln(YamlFile.Value['person.occupation'].AsString);
+  Writeln(YamlFile.Value['person.age'].AsString);
 
   { Or single key }
   with YamlFile.Value['person'] do
