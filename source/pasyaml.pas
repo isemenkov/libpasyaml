@@ -49,7 +49,7 @@ type
     function GetValue (AKey : String) : TOptionReader;
       {$IFNDEF DEBUG}inline;{$ENDIF}
   public
-    constructor Create;
+    constructor Create (APathKeyDelimiter : String = '.');
     destructor Destroy; override;
 
     { Parse YAML configuration from string }
@@ -59,7 +59,7 @@ type
     property Value [AKey : String] : TOptionReader read GetValue;
   private
     const
-      ERROR_OK                                                      =  1;
+      ERROR_OK                                                           = 1;
 
     type    
       { Config document elements types }
@@ -172,6 +172,7 @@ type
     var
       FParser : yaml_parser_t;
       FRoot : TOptionReader;
+      FPathKeyDelimiter : String;
   public
     type
       { Reader for configuration option }
@@ -184,11 +185,13 @@ type
             FOption : PItemValue;
             FCount : Integer;
             FPosition : Cardinal;
+            FPathKeyDelimiter : String;
 
             function GetCurrent : TOptionReader;
               {$IFNDEF DEBUG}inline;{$ENDIF}
           public
-            constructor Create (AOption : PItemValue);
+            constructor Create (AOption : PItemValue; APathKeyDelimiter : 
+              String = '.');
             function MoveNext : Boolean;
               {$IFNDEF DEBUG}inline;{$ENDIF}
             function GetEnumerator : TSequenceEnumerator;
@@ -196,13 +199,18 @@ type
             property Current : TOptionReader read GetCurrent;
           end;
       protected
+        { Parse option path }
+        function ParsePath (APath : String) : TOptionReader; 
+          {$IFNDEF DEBUG}inline;{$ENDIF}
+
         function GetValue (AKey : String) : TOptionReader;
           {$IFNDEF DEBUG}inline;{$ENDIF}
         function ParseDateTime (AValue : String) : TDateTime;
           {$IFNDEF DEBUG}inline;{$ENDIF}
       public
-        constructor Create;
-        constructor Create (AValue : PItemValue);
+        constructor Create (APathKeyDelimiter : String = '.');
+        constructor Create (AValue : PItemValue; APathKeyDelimiter : String =
+          '.');
         destructor Destroy; override;
 
         { Return TRUE if element is Map type }
@@ -249,6 +257,7 @@ type
         property Value [AKey : String] : TOptionReader read GetValue;
       private
         FValue : TItemValue;
+        FPathKeyDelimiter : String;
       end;
 
       { Writer for configuration option }
@@ -256,6 +265,18 @@ type
       public
         constructor Create;
       end;
+  public
+    { Return TRUE if root element is Map type }
+    function IsMap : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+
+    { Return TRUE if root element is Sequence type }
+    function IsSequence : Boolean;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+
+    { Return root element's value as Sequence enumerator }
+    function AsSequence : TOptionReader.TSequenceEnumerator;
+      {$IFNDEF DEBUG}inline;{$ENDIF}
   end;
 
 implementation
@@ -404,10 +425,12 @@ end;
 { TYamlFile.TOptionReader.TSequenceEnumerator }
 
 constructor TYamlFile.TOptionReader.TSequenceEnumerator.Create (AOption :
-  PItemValue);
+  PItemValue; APathKeyDelimiter : String);
 begin
   FOption := AOption;
   FPosition := 0;
+  FPathKeyDelimiter := APathKeyDelimiter;
+
   if (FOption = nil) or (AOption^.ValueType <> TYPE_SEQUENCE) then
     FCount := 0
   else
@@ -418,12 +441,13 @@ function TYamlFile.TOptionReader.TSequenceEnumerator.GetCurrent : TOptionReader;
 begin
   if FOption = nil then
   begin
-    Result := TOptionReader.Create(FOption);
+    Result := TOptionReader.Create(FOption, FPathKeyDelimiter);
     Exit;
   end;
 
   Result := 
-    TOptionReader.Create(@FOption^.Sequence.NthEntry(FPosition).Value.FValue);
+    TOptionReader.Create(@FOption^.Sequence.NthEntry(FPosition).Value.FValue,
+    FPathKeyDelimiter);
   Inc(FPosition);
 end;
 
@@ -440,14 +464,17 @@ end;
 
 { TYamlFile.TOptionReader }
 
-constructor TYamlFile.TOptionReader.Create;
+constructor TYamlFile.TOptionReader.Create (APathKeyDelimiter : String);
 begin
   FValue.ValueType := TYPE_NONE;
+  FPathKeyDelimiter := APathKeyDelimiter;
 end;
 
-constructor TYamlFile.TOptionReader.Create (AValue : PItemValue);
+constructor TYamlFile.TOptionReader.Create (AValue : PItemValue; 
+  APathKeyDelimiter : String);
 begin
   FValue := AValue^;
+  FPathKeyDelimiter := APathKeyDelimiter;
 end;
 
 destructor TYamlFile.TOptionReader.Destroy;
@@ -466,15 +493,41 @@ begin
   inherited Destroy;
 end;
 
+function TYamlFile.TOptionReader.ParsePath (APath : String) : TOptionReader;
+var
+  Key : String;
+  StartPos, DelimiterPos : Integer;
+  Item : TOptionReader;
+begin
+  if FValue.ValueType <> TYPE_MAP then
+  begin
+    Exit(TOptionReader.Create(FPathKeyDelimiter));
+  end;
+
+  StartPos := 1;
+  Item := Self;
+  DelimiterPos := Pos(FPathKeyDelimiter, APath);
+
+  if DelimiterPos = 0 then
+  begin
+    Exit(Item.FValue.Map.Search(APath));
+  end;
+
+  while DelimiterPos <> 0 do
+  begin
+    Key := Copy(APath, StartPos, DelimiterPos - StartPos);
+    Item := Item.FValue.Map.Search(Key);
+    StartPos := DelimiterPos + 1;
+    DelimiterPos := Pos(FPathKeyDelimiter, APath, StartPos);
+  end;
+
+  Key := Copy(APath, StartPos, Length(APath) - StartPos + 1);
+  Result := Item.FValue.Map.Search(Key);
+end;
+
 function TYamlFile.TOptionReader.GetValue (AKey : String) : TOptionReader;
 begin
-  if FValue.ValueType = TYPE_MAP then
-  begin
-    Result := FValue.Map.Search(AKey);
-  end else
-  begin
-    Result := TOptionReader.Create;
-  end;
+  Result := ParsePath(AKey);
 end;
 
 function TYamlFile.TOptionReader.ParseDateTime (AValue : String) : TDateTime;
@@ -543,7 +596,7 @@ end;
 
 function TYamlFile.TOptionReader.AsSequence : TSequenceEnumerator;
 begin
-  Result := TSequenceEnumerator.Create(@FValue);
+  Result := TSequenceEnumerator.Create(@FValue, FPathKeyDelimiter);
 end;
 
 { TYamlFile.TOptionWriter }
@@ -554,9 +607,10 @@ end;
 
 { TYamlFile }
 
-constructor TYamlFile.Create;
+constructor TYamlFile.Create (APathKeyDelimiter : String);
 begin
-  FRoot := TOptionReader.Create;
+  FPathKeyDelimiter := APathKeyDelimiter;
+  FRoot := TOptionReader.Create(FPathKeyDelimiter);
 
   if yaml_parser_initialize(@FParser) <> ERROR_OK then
     ;
@@ -671,7 +725,7 @@ var
     function CreateOptionReader (AValueType : TItemValueType) : TOptionReader;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      Result := TOptionReader.Create;
+      Result := TOptionReader.Create(FPathKeyDelimiter);
       Result.FValue.ValueType := AValueType;
 
       case AValueType of
@@ -764,7 +818,7 @@ var
     function AddSequenceValue (AElement : PItemValue) : PItemValue; overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Sequence.Append(TOptionReader.Create);
+      AElement^.Sequence.Append(TOptionReader.Create(FPathKeyDelimiter));
       Result := @AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1)
         .Value.FValue;
     end;
@@ -775,7 +829,7 @@ var
       PItemValue; overload;
       {$IFNDEF DEBUG}inline;{$ENDIF}
     begin
-      AElement^.Sequence.Append(TOptionReader.Create);
+      AElement^.Sequence.Append(TOptionReader.Create(FPathKeyDelimiter));
       AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue
         .ValueType := TYPE_SCALAR;
       AElement^.Sequence.NthEntry(AElement^.Sequence.Length - 1).Value.FValue
@@ -1046,13 +1100,23 @@ end;
 
 function TYamlFile.GetValue (AKey : String) : TOptionReader;
 begin
-  if FRoot.FValue.ValueType = TYPE_MAP then
-  begin
-    Result := FRoot.FValue.Map.Search(AKey);
-  end else
-  begin
-    Result := TOptionReader.Create;
-  end;
+  Result := FRoot.ParsePath(AKey);
+end;
+
+function TYamlFile.IsMap : Boolean;
+begin
+  Result := (FRoot.FValue.ValueType = TYPE_MAP);
+end;
+
+function TYamlFile.IsSequence : Boolean;
+begin
+  Result := (FRoot.FValue.ValueType = TYPE_SEQUENCE);
+end;
+
+function TYamlFile.AsSequence : TOptionReader.TSequenceEnumerator;
+begin
+  Result := TOptionReader.TSequenceEnumerator.Create(@FRoot.FValue,
+    FPathKeyDelimiter);
 end;
 
 end.

@@ -15,6 +15,8 @@ type
   published
     procedure Test_YamlFile_CreateNewEmpty;
     procedure Test_YamlFile_ParseMap;
+    procedure Test_YamlFile_ParseMapPath;
+    procedure Test_YamlFile_ParseSequence;
     procedure Test_YamlFile_ParseSequenceItemMap;
     procedure Test_YamlFile_ParseSequenceAndMap;
     procedure Test_YamlFile_ParseMultipleMap;
@@ -60,6 +62,96 @@ begin
   AssertTrue('#Test_YamlFile_ParseMap -> ' +
      'js_url value is not correct',
      YamlFile.Value['js_url'].AsString = '/finex/html/js');
+
+  FreeAndNil(YamlFile);
+end;
+
+procedure TYamlTestCase.Test_YamlFile_ParseMapPath;
+const
+  config : string = ''                                            +
+    'nodes:'                                                      + sLineBreak +
+    '  name: controller'                                          + sLineBreak +
+    '  description: Cloud controller node'                        + sLineBreak +
+    '  nics:'                                                     + sLineBreak +
+    '    management_network: eth0'                                + sLineBreak +
+    '    data_network: eth1'                                      + sLineBreak +
+    'environment:'                                                + sLineBreak +
+    '  base: example-os'                                          + sLineBreak +
+    '  override_attributes:'                                      + sLineBreak +
+    '    ntp.servers: 0.pool.ntp.org';
+var
+  YamlFile : TYamlFile;
+begin
+  YamlFile := TYamlFile.Create('/');
+  YamlFile.Parse(config);
+
+  AssertTrue('#Test_YamlFile_ParseMapPath -> ' +
+     'nodes.name value is not correct',
+     YamlFile.Value['nodes/name'].AsString = 'controller');
+  AssertTrue('#Test_YamlFile_ParseMapPath -> ' +
+     'nodes.description value is not correct',
+     YamlFile.Value['nodes/description'].AsString = 'Cloud controller node');
+  AssertTrue('#Test_YamlFile_ParseMapPath -> ' +
+     'nodes.nics.management_network value is not correct',
+     YamlFile.Value['nodes/nics/management_network'].AsString = 'eth0');
+  AssertTrue('#Test_YamlFile_ParseMapPath -> ' +
+     'nodes.nics.data_network value is not correct',
+     YamlFile.Value['nodes/nics/data_network'].AsString = 'eth1');
+  AssertTrue('#Test_YamlFile_ParseMapPath -> ' +
+     'environment.base value is not correct',
+     YamlFile.Value['environment/base'].AsString = 'example-os');
+  AssertTrue('#Test_YamlFile_ParseMapPath -> ' +
+     'environment.override_attributes.ntp.servers value is not correct',
+     YamlFile.Value['environment/override_attributes/ntp.servers'].AsString =
+     '0.pool.ntp.org');
+
+  FreeAndNil(YamlFile);
+end;
+
+procedure TYamlTestCase.Test_YamlFile_ParseSequence;
+const
+  config : string = ''                                            +
+    '- value1'                                                    + sLineBreak +
+    '- value2'                                                    + sLineBreak +
+    '- value3';
+var
+  YamlFile : TYamlFile;
+  Seq : TYamlFile.TOptionReader;
+  Index : Integer;
+begin
+  YamlFile := TYamlFile.Create;
+  YamlFile.Parse(config);
+
+  AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+     'root element is not correct type', not YamlFile.IsMap);
+  AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+     'root element is not correct type', YamlFile.IsSequence);
+
+  Index := 0;
+  for Seq in YamlFile.AsSequence do
+  begin
+    case Index of
+      0 : begin
+        AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+          'sequence value index 0 is not correct', Seq.AsString = 'value1');
+      end;
+      1 : begin
+        AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+          'sequence value index 1 is not correct', Seq.AsString = 'value2');
+      end;
+      2 : begin
+        AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+          'sequence value index 2 is not correct', Seq.AsString = 'value3');
+      end;
+      3 : begin
+        AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+          'incorrect sequence value index', False);
+      end;
+    end;
+    Inc(Index);
+  end;
+  AssertTrue('#Test_YamlFile_ParseSequence -> ' +
+    'sequence counter is not correct', Index = 3);
 
   FreeAndNil(YamlFile);
 end;
@@ -238,7 +330,7 @@ var
   Seq : TYamlFile.TOptionReader;
   Index : Integer = 0;
 begin
-  YamlFile := TYamlFile.Create;
+  YamlFile := TYamlFile.Create('/');
   YamlFile.Parse(config);
 
   AssertTrue('#Test_YamlFile_ParseMultipleMap -> ' +
