@@ -262,8 +262,18 @@ type
 
       { Writer for configuration option }
       TOptionWriter = class
+      protected
+        { Create new map value }
+        function CreateMapValue (AName : String) : TOptionWriter;
+          {$IFNDEF DEBUG}inline;{$ENDIF}
       public
-        constructor Create;
+        constructor Create (AValue : PItemValue; APathKeyDelimiter : String =
+          '.');
+
+        property CreateMap [AName : String] : TOptionWriter read CreateMapValue;
+      private
+        FValue : TItemValue;
+        FPathKeyDelimiter : String;
       end;
   public
     { Return TRUE if root element is Map type }
@@ -600,9 +610,11 @@ begin
 end;
 
 { TYamlFile.TOptionWriter }
-constructor TYamlFile.TOptionWriter.Create;
+constructor TYamlFile.TOptionWriter.Create (AValue : PItemValue; 
+  APathKeyDelimiter : String);
 begin
-
+  FValue := AValue^;
+  FPathKeyDelimiter := APathKeyDelimiter;
 end;
 
 { TYamlFile }
