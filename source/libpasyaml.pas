@@ -3,7 +3,7 @@
 (*                object pascal wrapper around libyaml library                *)
 (*                       https://github.com/yaml/libyaml                      *)
 (*                                                                            *)
-(* Copyright (c) 2020                                       Ivan Semenkov     *)
+(* Copyright (c) 2020 - 2021                                Ivan Semenkov     *)
 (* https://github.com/isemenkov/libpasyaml                  ivan@semenkov.pro *)
 (*                                                          Ukraine           *)
 (******************************************************************************)
@@ -26,18 +26,36 @@
 
 unit libpasyaml;
 
-{$mode objfpc}{$H+}
+{$IFDEF FPC}
+  {$mode objfpc}{$H+}
+{$ENDIF}
 
 interface
 
 uses
-  Classes, SysUtils;
+  SysUtils;
 
 {$IFDEF FPC}
   {$PACKRECORDS C}
 {$ENDIF}
 
 const
+  {$IFDEF FPC}
+    {$IFDEF WINDOWS}
+      libYaml = 'libyaml.dll';
+    {$ENDIF}
+    {$IFDEF LINUX}
+      libYaml = 'libyaml.so';
+    {$ENDIF}
+  {$ELSE}
+    {$IFDEF MSWINDOWS OR defined(MSWINDOWS)}
+      libYaml = 'libyaml.dll';
+    {$ENDIF}
+    {$IFDEF LINUX}
+      libYaml = 'libyaml.so';
+    {$ENDIF}
+  {$ENDIF}
+
   { The tag @c !!null with the only possible value: @c null. }
   YAML_NULL_TAG = 'tag:yaml.org,2002:null';
 
@@ -866,13 +884,6 @@ type
   end;
   pyaml_emitter_t = ^yaml_emitter_t;
   yaml_emitter_t = yaml_emitter_s;
-
-{$IFDEF WINDOWS}
-  const libYaml = 'libyaml.dll';
-{$ENDIF}
-{$IFDEF LINUX}
-  const libYaml = 'libyaml.so';
-{$ENDIF}
 
 { Get the library version as a string.
 

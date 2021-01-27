@@ -3,7 +3,7 @@
 (*                object pascal wrapper around libyaml library                *)
 (*                       https://github.com/yaml/libyaml                      *)
 (*                                                                            *)
-(* Copyright (c) 2020                                       Ivan Semenkov     *)
+(* Copyright (c) 2020 - 2021                                Ivan Semenkov     *)
 (* https://github.com/isemenkov/libpasyaml                  ivan@semenkov.pro *)
 (*                                                          Ukraine           *)
 (******************************************************************************)
@@ -26,7 +26,10 @@
 
 unit pasyaml;
 
-{$mode objfpc}{$H+}
+{$IFDEF FPC}
+  {$mode objfpc}{$H+}
+{$ENDIF}
+
 {$IFOPT D+}
   {$DEFINE DEBUG}
 {$ENDIF}
