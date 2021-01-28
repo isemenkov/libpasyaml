@@ -37,15 +37,15 @@ unit yamlparser;
 interface
 
 uses
-  SysUtils, libpasyaml, yamltypes, container.queue, utils.variant;
+  SysUtils, libpasyaml, yamltypes, container.queue, utils.variant, 
+  utils.api.cstring, utils.result;
 
 type
   TYamlParser = class
   protected
     type
       { Config document elements types }
-      TItemValueType = (
-        TYPE_NONE,
+      TYamlTokenType = (
         TYPE_MAP,
         TYPE_MAP_KEY,
         TYPE_MAP_VALUE,
@@ -53,42 +53,45 @@ type
         TYPE_SEQUENCE_ENTRY,
         TYPE_ANCHOR,
         TYPE_ALIAS,
-        TYPE_SCALAR,
-        TYPE_END_BLOCK
+        TYPE_END_BLOCK,
+        TYPE_SCALAR
       );
 
+      TYamlMapToken = type Pointer;
       TYamlMapKeyToken = type String;
       TYamlMapValueToken = type String;
+      TYamlSequenceToken = type Pointer;
       TYamlSequenceEntryToken = type String;
       TYamlAnchorToken = type String;
       TYamlAliasToken = type String;
-      TYamlScalarToken = type String;
+      TYamlEndBlock = type Pointer;
 
       TYamlParserToken = class
-        ({$IFDEF FPC}specialize{$ENDIF} TVariant8<TYamlMap, TYamlMapKeyToken,
-        TYamlMapValueToken, TYamlSequence, TYamlSequenceEntryToken,
-        TYamlAnchorToken, TYamlAliasToken, TYamlScalarToken>);
-      
-      TYamlMapTokenType = TYamlParserToken.TVariantValue1;
-      TYamlMapKeyTokenType = TYamlParserToken.TVariantValue2;
-      TYamlMapValueTokenType = TYamlParserToken.TVariantValue3;
-      TYamlSequenceTokenType = TYamlParserToken.TVariantValue4;
-      TYamlSequenceEntryTokenType = TYamlParserToken.TVariantValue5;
-      TYamlAnchorTokenType = TYamlParserToken.TVariantValue6;
-      TYamlAliasTokenType = TYamlParserToken.TVariantValue7;
-      TYamlScalarTokenType = TYamlParserToken.TVariantValue8;
+        ({$IFDEF FPC}specialize{$ENDIF} TVariant8<TYamlMapToken, 
+        TYamlMapKeyToken, TYamlMapValueToken, TYamlSequenceToken, 
+        TYamlSequenceEntryToken, TYamlAnchorToken, TYamlAliasToken,
+        TYamlEndBlock>);
 
       TYamlTokensStack = class
         ({$IFDEF FPC}specialize{$ENDIF} TQueue<TYamlParserToken>);
   public 
     type
       TParseErrors = (
-
+        ERROR_OK                                                         = 1,
+        ERROR_STRING_PARSE
       );
+      TParseResult = {$IFDEF FPC}specialize{$ENDIF} TVoidResult<TParseErrors>;
   public
     constructor Create;
     destructor Destroy; override;
+
+    { Parse YAML configuration from string }
+    function Parse (AConfigString : String) : TParseResult;
   protected
+    procedure CreateToken (ATokenType : TYamlTokenType; AValue : String);
+      {$IFNDEF DEBUG}inline;{$ENDIF}
+  protected
+    FParser : yaml_parser_t;
     FTokens : TYamlTokensStack;
     FAliases : TYamlMap;
   end;
@@ -110,5 +113,116 @@ begin
 
   inherited Destroy;
 end;
+
+procedure TYamlParser.CreateToken (ATokenType : TYamlTokenType; AValue : 
+  String);
+var
+  Token : TYamlParserToken;
+begin
+  Token := TYamlParserToken.Create;
+
+  case ATokenType of
+    TYPE_MAP : begin
+      Token.SetValue(TYamlMapToken(nil));
+    end;
+    TYPE_MAP_KEY : begin
+      Token.SetValue(TYamlMapKeyToken(''));
+    end;
+    TYPE_MAP_VALUE : begin
+      Token.SetValue(TYamlMapValueToken(''));
+    end;
+    TYPE_SEQUENCE : begin
+      Token.SetValue(TYamlSequenceToken(nil));
+    end;
+    TYPE_SEQUENCE_ENTRY : begin
+      Token.SetValue(TYamlSequenceEntryToken(''));
+    end;
+    TYPE_ANCHOR : begin
+      Token.SetValue(TYamlAnchorToken(''));
+    end;
+    TYPE_ALIAS : begin
+      Token.SetValue(TYamlAliasToken(''));
+    end;
+    TYPE_END_BLOCK : begin
+      Token.SetValue(TYamlEndBlock(nil));
+    end;
+    TYPE_SCALAR : begin
+      case FTokens.PeekTail.GetType of
+        TYPE_MAP_KEY : begin
+          FTokens.PeekTail.SetValue(TYamlMapKeyToken(AValue));
+        end;
+        TYPE_MAP_VALUE : begin
+          FTokens.PeekTail.SetValue(TYamlMapValueToken(AValue));
+        end;
+        TYPE_SEQUENCE_ENTRY : begin
+          FTokens.PeekTail.SetValue(TYamlSequenceEntryToken(AValue));
+        end;
+        TYPE_ANCHOR : begin
+          FTokens.PeekTail.SetValue(TYamlAnchorToken(AValue));
+        end;
+        TYPE_ALIAS : begin
+          FTokens.PeekTail.SetValue(TYamlAliasToken(AValue));
+        end;
+      end;
+    end;
+  end;
+
+  if ATokenType <> TYPE_SCALAR then
+    FTokens.PushTail(Token);
+end;
+
+function TYamlParser.Parse (AConfigString : String) : TParseResult;
+var
+  Token : yaml_token_t;
+begin
+  yaml_parser_set_input_string(@FParser, 
+    PByte(API.CString.Create(AConfigString).ToPAnsiChar), Length(ConfigString));
+
+  repeat
+    if yaml_parser_scan(@FParser, @Token) <> ERROR_OK then
+    begin
+      Exit(TParseResult.CreateError(ERROR_STRING_PARSE));
+    end;
+
+    case Token.token_type of
+      YAML_STREAM_START_TOKEN : ;
+      YAML_STREAM_END_TOKEN : ;
+      YAML_KEY_TOKEN : begin
+        CreateToken(TYPE_MAP_KEY, API.CString.Create(PAnsiChar(
+          CharToken.token.scalar.value)).ToString);
+        end;
+      YAML_VALUE_TOKEN : begin
+        CreateToken(TYPE_MAP_VALUE, API.CString.Create(PAnsiChar(
+          CharToken.token.scalar.value)).ToString);
+        end;
+      YAML_ANCHOR_TOKEN : begin
+        CreateToken(TYPE_ANCHOR, API.CString.Create(
+          PAnsiChar(CharToken.token.anchor.value)).ToString);
+        end;
+      YAML_ALIAS_TOKEN : begin
+        CreateToken(TYPE_ALIAS, API.CString.Create(
+          PAnsiChar(CharToken.token.alias_param.value)).ToString);
+        end;
+      YAML_BLOCK_SEQUENCE_START_TOKEN : begin
+        CreateToken(TYPE_SEQUENCE, '');
+        end;
+      YAML_BLOCK_ENTRY_TOKEN : begin
+        CreateToken(TYPE_SEQUENCE_ENTRY, '');
+        end;
+      YAML_BLOCK_MAPPING_START_TOKEN : begin
+        CreateToken(TYPE_MAP, '');
+        end;
+    end;
+
+    if Token.token_type <> YAML_STREAM_END_TOKEN then
+    begin
+      yaml_token_delete(@Token);
+    end;
+
+  until Token.token_type <> YAML_STREAM_END_TOKEN;
+
+  yaml_token_delete(@Token);
+end;
+
 
 end.
